@@ -146,24 +146,22 @@ func (c *Context) JavaScript(code string) error {
 	return c.String(code)
 }
 
-// EventStream sends server events to the client.
+// 将服务器事件发送到客户端event-stream,用了http.Flusher
+// 类似sse功能
 func (c *Context) EventStream(stream *EventStream) error {
 	defer close(stream.Closed)
 
-	// Flush
 	flusher, ok := c.response.inner.(http.Flusher)
-
 	if !ok {
 		return c.Error(http.StatusNotImplemented, "Flushing not supported")
 	}
 
-	// Catch disconnect events
+	// 捕捉断开连接
 	disconnectedContext := c.request.Context()
 	disconnectedContext, cancel := stdContext.WithDeadline(disconnectedContext, time.Now().Add(2*time.Hour))
 	disconnected := disconnectedContext.Done()
 	defer cancel()
 
-	// Send headers
 	header := c.response.inner.Header()
 	header.Set(contentTypeHeader, contentTypeEventStream)
 	header.Set(cacheControlHeader, "no-cache")
@@ -182,16 +180,16 @@ func (c *Context) EventStream(stream *EventStream) error {
 
 				switch data.(type) {
 				case string, []byte:
-					// Do nothing with the data if it's already a string or byte slice.
+					// string和byte不用处理了
 				default:
 					var err error
 					data, err = Json.Marshal(data)
 					if err != nil {
-						Log.Error(fmt.Sprintf("Failed encoding event data as JSON: %v", data))
+						Log.Error(fmt.Sprintf("Failed encoding flush event data as JSON: %v", data))
 					}
 				}
 
-				Log.Debug(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Name, data))
+				Log.Debug(fmt.Sprintf("flush event: %s\ndata: %s\n\n", event.Name, data))
 				flusher.Flush()
 			}
 		}
