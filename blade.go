@@ -4,7 +4,6 @@ import (
 	"compress/gzip"
 	stdContext "context"
 	"io"
-	"mime"
 	"net"
 	"net/http"
 	"os"
@@ -33,10 +32,6 @@ type Blade struct {
 	contextPool    sync.Pool
 	gzipWriterPool sync.Pool
 	server         atomic.Value
-
-	routes struct {
-		GET []string
-	}
 }
 
 // New creates a new blade.
@@ -51,9 +46,6 @@ func New() *Blade {
 	b.contextPool.New = func() interface{} {
 		return &Context{b: b}
 	}
-
-	// MIME types
-	initMIMETypes()
 
 	return b
 }
@@ -73,7 +65,6 @@ func (b *Blade) Gzip() bool {
 
 // Get registers your function to be called when the given GET path has been requested.
 func (b *Blade) Get(path string, handler Handler) {
-	b.routes.GET = append(b.routes.GET, path)
 	b.router.Add(http.MethodGet, path, handler)
 }
 
@@ -324,9 +315,7 @@ func (b *Blade) acquireGZipWriter(response io.Writer) *gzip.Writer {
 	return writer
 }
 
-// BindMiddleware applies the middleware to every router node.
-// This is called by `Run` automatically and should never be called
-// outside of tests.
+// 绑定中间件
 func (b *Blade) BindMiddleware() {
 	b.router.bind(func(handler Handler) Handler {
 		return handler.Bind(b.middleware...)
@@ -344,24 +333,4 @@ func shutdown(server *http.Server) error {
 	defer cancel()
 
 	return errors.WithStack(server.Shutdown(ctx))
-}
-
-// initMIMETypes adds a few additional types to the MIME package.
-func initMIMETypes() {
-	mimeTypes := []struct {
-		extension string
-		typ       string
-	}{
-		{
-			extension: ".apng",
-			typ:       "image/apng",
-		},
-	}
-
-	for _, m := range mimeTypes {
-		err := mime.AddExtensionType(m.extension, m.typ)
-		if err != nil {
-			Log.Error("Failed adding ", m.typ, " MIME extension", m.typ)
-		}
-	}
 }
