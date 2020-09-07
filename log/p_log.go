@@ -46,8 +46,8 @@ func (p *pLog) Fatal(msg ...string) {
 func (p *pLog) write(l Level, msg []string) {
 	if l >= p.level {
 		lSring := l.String()
-		_, file, line, _ := caller(2)
+		_, file, line := caller(3)
 		t := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Printf("%s | %s | %s | %d | %s\n", t, lSring, file, line, strings.Join(msg, ""))
+		fmt.Printf("%s | %s | %s:%d | %s\n", t, lSring, file, line, strings.Join(msg, ""))
 	}
 }

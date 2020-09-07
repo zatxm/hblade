@@ -2,7 +2,6 @@ package hblade
 
 import (
 	"fmt"
-	"io"
 	"strings"
 )
 
@@ -283,33 +282,33 @@ func (node *treeNode) each(callback func(*treeNode)) {
 }
 
 // PrettyPrint prints a human-readable form of the tree to the given writer.
-func (node *treeNode) PrettyPrint(writer io.Writer) {
-	node.prettyPrint(writer, -1)
+func (node *treeNode) PrettyPrint() {
+	node.prettyPrint(-1)
 }
 
 // prettyPrint
-func (node *treeNode) prettyPrint(writer io.Writer, level int) {
+func (node *treeNode) prettyPrint(level int) {
 	prefix := ""
 
 	if level >= 0 {
 		prefix = strings.Repeat("  ", level) + "|_ "
 	}
 
-	fmt.Fprintf(writer, "%s%s [%t]\n", prefix, node.prefix, node.data != nil)
+	Log.Info(fmt.Sprintf("%s%s [%t]\n", prefix, node.prefix, node.data != nil))
 
 	for _, child := range node.children {
 		if child == nil {
 			continue
 		}
 
-		child.prettyPrint(writer, level+1)
+		child.prettyPrint(level + 1)
 	}
 
 	if node.parameter != nil {
-		node.parameter.prettyPrint(writer, level+1)
+		node.parameter.prettyPrint(level + 1)
 	}
 
 	if node.wildcard != nil {
-		node.wildcard.prettyPrint(writer, level+1)
+		node.wildcard.prettyPrint(level + 1)
 	}
 }

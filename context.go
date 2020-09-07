@@ -23,11 +23,8 @@ const (
 	// 此值应接近TCP包大小,设置为256将最终数据包的大小减少了约70个字节
 	gzipThreshold = 256
 
-	// maxParams defines the maximum number of parameters per route.
-	maxParams = 16
-
-	// maxModifiers defines the maximum number of modifiers per context.
-	maxModifiers = 4
+	// 路由最大参数
+	maxParams = 64
 )
 
 // Context represents a request & response context.
@@ -40,16 +37,8 @@ type Context struct {
 	paramNames    [maxParams]string
 	paramValues   [maxParams]string
 	paramCount    int
-	modifiers     [maxModifiers]Modifier
 	modifierCount int
 	sameSite      http.SameSite
-}
-
-// AddModifier adds a modifier that can change the response body
-// contents of in-memory responses before the actual response happens.
-func (c *Context) AddModifier(modifier Modifier) {
-	c.modifiers[c.modifierCount] = modifier
-	c.modifierCount++
 }
 
 // 返回blade
@@ -57,19 +46,11 @@ func (c *Context) B() *Blade {
 	return c.b
 }
 
-// Bytes responds either with raw text or gzipped if the
-// text length is greater than the gzip threshold. Requires a byte slice.
+// 返回字节处理
 func (c *Context) Bytes(body []byte) error {
 	// If the request has been canceled by the client, stop.
 	if c.request.Context().Err() != nil {
 		return errors.New("Request interrupted by the client")
-	}
-
-	// If we registered any response body modifiers, invoke them.
-	if c.modifierCount > 0 {
-		for i := 0; i < c.modifierCount; i++ {
-			body = c.modifiers[i](body)
-		}
 	}
 
 	// Small response
@@ -216,13 +197,12 @@ func (c *Context) EventStream(stream *EventStream) error {
 				default:
 					var err error
 					data, err = Json.Marshal(data)
-
 					if err != nil {
-						fmt.Printf("Failed encoding event data as JSON: %v", data)
+						Log.Error(fmt.Sprintf("Failed encoding event data as JSON: %v", data))
 					}
 				}
 
-				fmt.Fprintf(c.response.inner, "event: %s\ndata: %s\n\n", event.Name, data)
+				Log.Debug(fmt.Sprintf("event: %s\ndata: %s\n\n", event.Name, data))
 				flusher.Flush()
 			}
 		}

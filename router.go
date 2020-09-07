@@ -3,7 +3,6 @@ package hblade
 import (
 	"fmt"
 	"net/http"
-	"os"
 )
 
 // Router is a high-performance router.
@@ -22,7 +21,6 @@ type Router struct {
 // Add registers a new handler for the given method and path.
 func (router *Router) Add(method string, path string, handler Handler) {
 	tree := router.selectTree(method)
-
 	if tree == nil {
 		panic(fmt.Errorf("Unknown HTTP method: '%s'", method))
 	}
@@ -67,7 +65,7 @@ func (router *Router) bind(transform func(Handler) Handler) {
 // Print shows a pretty print of the dynamic routes.
 func (router *Router) Print(method string) {
 	tree := router.selectTree(method)
-	tree.root.PrettyPrint(os.Stdout)
+	tree.root.PrettyPrint()
 }
 
 // selectTree returns the tree by the given HTTP method.

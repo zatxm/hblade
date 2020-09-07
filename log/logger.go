@@ -71,7 +71,7 @@ func (l Level) String() string {
 	}
 }
 
-func caller(skip int) (pc uintptr, file string, line int, ok bool) {
-	pc, file, line, ok = runtime.Caller(skip)
+func caller(skip int) (pc uintptr, file string, line int) {
+	pc, file, line, _ = runtime.Caller(skip)
 	return
 }

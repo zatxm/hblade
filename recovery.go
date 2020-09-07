@@ -3,7 +3,6 @@ package hblade
 import (
 	"fmt"
 	"net/http/httputil"
-	"os"
 	"runtime"
 )
 
@@ -22,7 +21,7 @@ func Recovery() Middleware {
 						rawReq, _ = httputil.DumpRequest(req, false)
 					}
 					pl := fmt.Sprintf("http call panic: %s\n%v\n%s\n", string(rawReq), err, buf)
-					fmt.Fprintf(os.Stderr, pl)
+					Log.Fatal(pl)
 					c.Error(500, err)
 				}
 			}()

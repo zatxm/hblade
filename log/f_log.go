@@ -61,13 +61,10 @@ func (f *fLog) Fatal(msg ...string) {
 func (f *fLog) write(l Level, msg []string) {
 	if l >= f.level {
 		lSring := l.String()
-		_, file, line, ok := caller(2)
-		if !ok {
-			panic("find err err")
-		}
+		_, file, line := caller(3)
 		f.compareFileMaxSize()
 		t := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(f.osFile, "%s | %s | %s | %d | %s\n", t, lSring, file, line, strings.Join(msg, ""))
+		fmt.Fprintf(f.osFile, "%s | %s | %s:%d | %s\n", t, lSring, file, line, strings.Join(msg, ""))
 	}
 }
 
