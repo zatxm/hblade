@@ -3,8 +3,6 @@ package hblade
 import (
 	"fmt"
 	"os"
-
-	"github.com/zeebo/xxh3"
 )
 
 func filterFlags(content string) string {
@@ -14,16 +12,6 @@ func filterFlags(content string) string {
 		}
 	}
 	return content
-}
-
-// Bytes hashes the given byte slice.
-func BytesHash(in []byte) uint64 {
-	return xxh3.Hash(in)
-}
-
-// String hashes the given string.
-func StringHash(in string) uint64 {
-	return xxh3.HashString(in)
 }
 
 func resolveAddress(addr []string) string {

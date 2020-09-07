@@ -60,19 +60,8 @@ func (c *Context) Bytes(body []byte) error {
 		return err
 	}
 
-	// 处理ETag请求头
-	etag := ETag(body)
-	if clientETag := c.request.Header(ifNoneMatchHeader); clientETag != "" {
-		if etag == clientETag {
-			// 没变化发送304
-			c.response.inner.WriteHeader(http.StatusNotModified)
-			return nil
-		}
-	}
-	header := c.response.inner.Header()
-	header.Set(etagHeader, etag)
-
 	// Content type
+	header := c.response.inner.Header()
 	contentType := header.Get(contentTypeHeader)
 	isMediaType := isMedia(contentType)
 
