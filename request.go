@@ -2,75 +2,72 @@ package hblade
 
 import (
 	stdContext "context"
+	"io/ioutil"
 	"net/http"
 )
 
-// Request is an interface for HTTP requests.
 type Request interface {
+	RawData() ([]byte, error)
 	Context() stdContext.Context
 	Header(string) string
 	Host() string
-	Internal() *http.Request
 	Method() string
 	Path() string
 	Protocol() string
 	Scheme() string
+	RawQuery() string
+	Req() *http.Request
 }
 
-// request represents the HTTP request used in the given context.
 type request struct {
-	inner *http.Request
+	req *http.Request
 }
 
-// Context returns the request context.
-func (req *request) Context() stdContext.Context {
-	return req.inner.Context()
+func (r *request) RawData() ([]byte, error) {
+	return ioutil.ReadAll(r.req.Body)
 }
 
-// Header returns the header value for the given key.
-func (req *request) Header(key string) string {
-	return req.inner.Header.Get(key)
+func (r *request) Context() stdContext.Context {
+	return r.req.Context()
 }
 
-// Method returns the request method.
-func (req *request) Method() string {
-	return req.inner.Method
+func (r *request) Header(key string) string {
+	return r.req.Header.Get(key)
 }
 
-// Protocol returns the request protocol.
-func (req *request) Protocol() string {
-	return req.inner.Proto
+func (r *request) Method() string {
+	return r.req.Method
 }
 
-// Host returns the requested host.
-func (req *request) Host() string {
-	return req.inner.Host
+func (r *request) Protocol() string {
+	return r.req.Proto
 }
 
-// Path returns the requested path.
-func (req *request) Path() string {
-	return req.inner.URL.Path
+func (r *request) Host() string {
+	return r.req.Host
 }
 
-// Scheme returns http or https depending on what scheme has been used.
-func (req *request) Scheme() string {
-	scheme := req.inner.Header.Get("X-Forwarded-Proto")
+func (r *request) Path() string {
+	return r.req.URL.Path
+}
 
+func (r *request) RawQuery() string {
+	return r.req.URL.RawQuery
+}
+
+func (r *request) Scheme() string {
+	scheme := r.Header("X-Forwarded-Proto")
 	if scheme != "" {
 		return scheme
 	}
 
-	if req.inner.TLS != nil {
+	if r.req.TLS != nil {
 		return "https"
 	}
 
 	return "http"
 }
 
-// Internal returns the underlying *http.Request.
-// This method should be avoided unless absolutely necessary
-// because Aero doesn't guarantee that the underlying framework
-// will always stay net/http based in the future.
-func (req *request) Internal() *http.Request {
-	return req.inner
+func (r *request) Req() *http.Request {
+	return r.req
 }

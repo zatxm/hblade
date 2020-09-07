@@ -55,13 +55,13 @@ func (c *Context) Bytes(body []byte) error {
 
 	// Small response
 	if len(body) < gzipThreshold {
-		c.response.inner.WriteHeader(c.status)
-		_, err := c.response.inner.Write(body)
+		c.response.rw.WriteHeader(c.status)
+		_, err := c.response.rw.Write(body)
 		return err
 	}
 
 	// Content type
-	header := c.response.inner.Header()
+	header := c.response.rw.Header()
 	contentType := header.Get(contentTypeHeader)
 	isMediaType := isMedia(contentType)
 
@@ -77,17 +77,17 @@ func (c *Context) Bytes(body []byte) error {
 
 	if !c.b.gzip || !clientSupportsGZip || !canCompress(contentType) {
 		header.Set(contentLengthHeader, strconv.Itoa(len(body)))
-		c.response.inner.WriteHeader(c.status)
-		_, err := c.response.inner.Write(body)
+		c.response.rw.WriteHeader(c.status)
+		_, err := c.response.rw.Write(body)
 		return err
 	}
 
 	// GZip
 	header.Set(contentEncodingHeader, contentEncodingGzip)
-	c.response.inner.WriteHeader(c.status)
+	c.response.rw.WriteHeader(c.status)
 
 	// Write response body
-	writer := c.b.acquireGZipWriter(c.response.inner)
+	writer := c.b.acquireGZipWriter(c.response.rw)
 	_, err := writer.Write(body)
 	writer.Close()
 
@@ -119,7 +119,7 @@ func (c *Context) JSON(value interface{}) error {
 
 // HTML sends a HTML string.
 func (c *Context) HTML(html string) error {
-	header := c.response.inner.Header()
+	header := c.response.rw.Header()
 	header.Set(contentTypeHeader, contentTypeHTML)
 	header.Set(contentTypeOptionsHeader, contentTypeOptions)
 	header.Set(xssProtectionHeader, xssProtection)
@@ -151,7 +151,7 @@ func (c *Context) JavaScript(code string) error {
 func (c *Context) EventStream(stream *EventStream) error {
 	defer close(stream.Closed)
 
-	flusher, ok := c.response.inner.(http.Flusher)
+	flusher, ok := c.response.rw.(http.Flusher)
 	if !ok {
 		return c.Error(http.StatusNotImplemented, "Flushing not supported")
 	}
@@ -162,12 +162,12 @@ func (c *Context) EventStream(stream *EventStream) error {
 	disconnected := disconnectedContext.Done()
 	defer cancel()
 
-	header := c.response.inner.Header()
+	header := c.response.rw.Header()
 	header.Set(contentTypeHeader, contentTypeEventStream)
 	header.Set(cacheControlHeader, "no-cache")
 	header.Set("Connection", "keep-alive")
 	header.Set("Access-Control-Allow-Origin", "*")
-	c.response.inner.WriteHeader(200)
+	c.response.rw.WriteHeader(200)
 
 	for {
 		select {
@@ -206,7 +206,7 @@ func (c *Context) File(file string) error {
 		c.response.SetHeader(cacheControlHeader, cacheControlMedia)
 	}
 
-	http.ServeFile(c.response.inner, c.request.inner, file)
+	http.ServeFile(c.response.rw, c.request.req, file)
 	return nil
 }
 
@@ -242,14 +242,14 @@ func (c *Context) Error(statusCode int, errorList ...interface{}) error {
 	return errors.New(message)
 }
 
-// Path returns the relative request path, e.g. /blog/post/123.
+// 获取相对请求路径,如/ws/gutu
 func (c *Context) Path() string {
-	return c.request.inner.URL.Path
+	return c.request.req.URL.Path
 }
 
-// SetPath sets the relative request path, e.g. /blog/post/123.
+// 设置相对请求路径,如/ws/gutu
 func (c *Context) SetPath(path string) {
-	c.request.inner.URL.Path = path
+	c.request.req.URL.Path = path
 }
 
 // Get retrieves an URL parameter.
@@ -270,7 +270,7 @@ func (c *Context) GetInt(param string) (int, error) {
 
 // Get IP by RemoteAddr
 func (c *Context) IP() string {
-	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.inner.RemoteAddr)); err == nil {
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.req.RemoteAddr)); err == nil {
 		return ip
 	}
 	return ""
@@ -291,23 +291,23 @@ func (c *Context) ClientIP() string {
 		return addr
 	}
 
-	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.inner.RemoteAddr)); err == nil {
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.req.RemoteAddr)); err == nil {
 		return ip
 	}
 
 	return ""
 }
 
-// Query retrieves the value for the given URL query parameter.
+// 从URL获取参数值
 func (c *Context) Query(param string) string {
-	return c.request.inner.URL.Query().Get(param)
+	return c.request.req.URL.Query().Get(param)
 }
 
 // Redirect redirects to the given URL.
 func (c *Context) Redirect(status int, u string) error {
 	c.status = status
 	c.response.SetHeader("Location", u)
-	c.response.inner.WriteHeader(c.status)
+	c.response.rw.WriteHeader(c.status)
 	return nil
 }
 
@@ -352,19 +352,17 @@ func (c *Context) ReadAll(reader io.Reader) error {
 	return c.Bytes(data)
 }
 
-// Reader sends the contents of the io.Reader without creating an in-memory copy.
-// E-Tags will not be generated for the content and compression will not be applied.
-// Use this function if your reader contains huge amounts of data.
+// 发送io.Reader内容,不会压缩
+// 如阅读器包含大量数据时用此功能
 func (c *Context) Reader(reader io.Reader) error {
-	_, err := io.Copy(c.response.inner, reader)
+	_, err := io.Copy(c.response.rw, reader)
 	return err
 }
 
-// ReadSeeker sends the contents of the io.ReadSeeker without creating an in-memory copy.
-// E-Tags will not be generated for the content and compression will not be applied.
-// Use this function if your reader contains huge amounts of data.
+// 发送io.ReadSeeker内容,不会压缩
+// 如阅读器包含大量数据时用此功能
 func (c *Context) ReadSeeker(reader io.ReadSeeker) error {
-	http.ServeContent(c.response.inner, c.request.inner, "", time.Time{}, reader)
+	http.ServeContent(c.response.rw, c.request.req, "", time.Time{}, reader)
 	return nil
 }
 
@@ -408,7 +406,7 @@ func (c *Context) ShouldBindJSON(obj interface{}) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
-	return b.Bind(c.request.Internal(), obj)
+	return b.Bind(c.request.req, obj)
 }
 
 // Bind checks the Content-Type to select a binding engine automatically,
@@ -436,7 +434,7 @@ func (c *Context) MustBindWith(obj interface{}, b binding.Binding) error {
 
 // Get name cookie value
 func (c *Context) Cookie(name string) (string, error) {
-	cookie, err := c.request.inner.Cookie(name)
+	cookie, err := c.request.req.Cookie(name)
 	if err != nil {
 		return "", err
 	}
@@ -454,7 +452,7 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 	if path == "" {
 		path = "/"
 	}
-	http.SetCookie(c.response.inner, &http.Cookie{
+	http.SetCookie(c.response.rw, &http.Cookie{
 		Name:     name,
 		Value:    url.QueryEscape(value),
 		MaxAge:   maxAge,

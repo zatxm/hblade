@@ -16,7 +16,7 @@ func Recovery() Middleware {
 					const size = 64 << 10
 					buf := make([]byte, size)
 					buf = buf[:runtime.Stack(buf, false)]
-					req := c.Request().Internal()
+					req := c.request.req
 					if req != nil {
 						rawReq, _ = httputil.DumpRequest(req, false)
 					}

@@ -266,8 +266,8 @@ func (b *Blade) Rewrite(rewrite func(RewriteContext)) {
 func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context {
 	c := b.contextPool.Get().(*Context)
 	c.status = http.StatusOK
-	c.request.inner = req
-	c.response.inner = res
+	c.request.req = req
+	c.response.rw = res
 	c.paramCount = 0
 	c.modifierCount = 0
 	return c
@@ -322,7 +322,24 @@ func (b *Blade) BindMiddleware() {
 	})
 }
 
-// shutdown will gracefully shut down the server.
+// 是否记录请求日志
+func (b *Blade) EnableLogRequest() {
+	b.Use(func(next Handler) Handler {
+		return func(c *Context) error {
+			method := c.request.Method()
+			path := c.request.Path()
+			raw := c.request.RawQuery()
+			if raw != "" {
+				path += "?" + raw
+			}
+			data, _ := c.request.RawData()
+			Log.Info(method, " ", path, " body:", string(data))
+			return next(c)
+		}
+	})
+}
+
+// 关闭服务
 func shutdown(server *http.Server) error {
 	if server == nil {
 		return errors.New("no server")
