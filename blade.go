@@ -3,6 +3,7 @@ package hblade
 import (
 	"compress/gzip"
 	stdContext "context"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -23,7 +24,6 @@ type Blade struct {
 	signAutoRun    bool //ctrl+c cannot be closed, it will start automatically
 	gzip           bool
 	router         Router
-	rewrite        []func(RewriteContext)
 	middleware     []Middleware
 	onStart        []func()
 	onShutdown     []func()
@@ -257,11 +257,6 @@ func (b *Blade) OnError(callback func(*Context, error)) {
 	b.onError = append(b.onError, callback)
 }
 
-// Rewrite adds a URL path rewrite function.
-func (b *Blade) Rewrite(rewrite func(RewriteContext)) {
-	b.rewrite = append(b.rewrite, rewrite)
-}
-
 // newContext returns a new context from the pool.
 func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context {
 	c := b.contextPool.Get().(*Context)
@@ -276,10 +271,6 @@ func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context 
 // ServeHTTP responds to the given request.
 func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	c := b.newContext(request, response)
-
-	for _, rewrite := range b.rewrite {
-		rewrite(c)
-	}
 
 	b.router.Lookup(request.Method, request.URL.Path, c)
 
@@ -326,15 +317,29 @@ func (b *Blade) BindMiddleware() {
 func (b *Blade) EnableLogRequest() {
 	b.Use(func(next Handler) Handler {
 		return func(c *Context) error {
+			start := time.Now()
 			method := c.request.Method()
 			path := c.request.Path()
+
+			err := next(c)
+
 			raw := c.request.RawQuery()
 			if raw != "" {
 				path += "?" + raw
 			}
 			data, _ := c.request.RawData()
-			Log.Info(method, " ", path, " body:", string(data))
-			return next(c)
+
+			end := time.Now()
+			latency := end.Sub(start)
+			if latency > time.Minute {
+				latency = latency - latency%time.Second
+			}
+
+			statusCode := c.Status()
+
+			Log.Info(fmt.Sprintf("%3d %13v,%s %s,body:%s", statusCode, latency, method, path, data))
+
+			return err
 		}
 	})
 }
