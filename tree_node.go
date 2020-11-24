@@ -1,8 +1,9 @@
 package hblade
 
 import (
-	"fmt"
 	"strings"
+
+	"go.uber.org/zap"
 )
 
 // node types
@@ -294,7 +295,10 @@ func (node *treeNode) prettyPrint(level int) {
 		prefix = strings.Repeat("  ", level) + "|_ "
 	}
 
-	Log.Info(fmt.Sprintf("%s%s [%t]\n", prefix, node.prefix, node.data != nil))
+	Log.Info("prettyPrint",
+		zap.String("prefix", prefix),
+		zap.String("node.prefix", node.prefix),
+		zap.Bool("node.data?", node.data != nil))
 
 	for _, child := range node.children {
 		if child == nil {

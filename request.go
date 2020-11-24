@@ -16,6 +16,7 @@ type Request interface {
 	Protocol() string
 	Scheme() string
 	RawQuery() string
+	ContentType() string
 	Req() *http.Request
 }
 
@@ -66,6 +67,10 @@ func (r *request) Scheme() string {
 	}
 
 	return "http"
+}
+
+func (r *request) ContentType() string {
+	return filterFlags(r.Header("Content-Type"))
 }
 
 func (r *request) Req() *http.Request {

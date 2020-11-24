@@ -1,10 +1,11 @@
 package hblade
 
 import (
+	"bytes"
 	"compress/gzip"
 	stdContext "context"
-	"fmt"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/json-iterator/go"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 var Json = jsoniter.ConfigCompatibleWithStandardLibrary
@@ -139,7 +141,8 @@ func (b *Blade) Run(addr ...string) error {
 	b.initRun()
 
 	address := resolveAddress(addr)
-	Log.Debug("Listening and serving HTTP on ", address)
+	Log.Debug("Listening and serving HTTP",
+		zap.String("address", address))
 	server := &http.Server{
 		Addr:    address,
 		Handler: b,
@@ -156,7 +159,8 @@ func (b *Blade) Run(addr ...string) error {
 func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
 	b.initRun()
 
-	Log.Debug("Listening and serving HTTPS on ", addr)
+	Log.Debug("Listening and serving HTTPS",
+		zap.String("address", addr))
 	server := &http.Server{
 		Addr:    addr,
 		Handler: b,
@@ -178,7 +182,8 @@ func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
 func (b *Blade) RunUnix(file string) error {
 	b.initRun()
 
-	Log.Debug("Listening and serving HTTP on unix:/", file)
+	Log.Debug("Listening and serving HTTP on unix:/",
+		zap.String("file", file))
 	os.Remove(file)
 	listener, err := net.Listen("unix", file)
 	if err != nil {
@@ -198,7 +203,8 @@ func (b *Blade) RunUnix(file string) error {
 func (b *Blade) RunServer(server *http.Server, l net.Listener) error {
 	b.initRun()
 
-	Log.Debug("Listening and serving HTTP on listener what's bind with address@", l.Addr().String())
+	Log.Debug("Listening and serving HTTP on listener what's bind with address@",
+		zap.String("address", l.Addr().String()))
 	server.Handler = b
 	b.server.Store(server)
 	if err := server.Serve(l); err != nil {
@@ -318,26 +324,35 @@ func (b *Blade) EnableLogRequest() {
 	b.Use(func(next Handler) Handler {
 		return func(c *Context) error {
 			start := time.Now()
-			method := c.request.Method()
+			st := start.Format("2006-01-02 15:04:05")
 			path := c.request.Path()
+			query := c.request.RawQuery()
+			method := c.request.Method()
+
+			var b []byte
+			// log body. not get TODO
+			if method != "GET" {
+				b, _ = c.request.RawData()
+				c.request.req.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+			}
 
 			err := next(c)
-
-			raw := c.request.RawQuery()
-			if raw != "" {
-				path += "?" + raw
-			}
-			data, _ := c.request.RawData()
 
 			end := time.Now()
 			latency := end.Sub(start)
 			if latency > time.Minute {
 				latency = latency - latency%time.Second
 			}
-
-			statusCode := c.Status()
-
-			Log.Info(fmt.Sprintf("%3d %13v,%s %s,body:%s", statusCode, latency, method, path, data))
+			Log.Info("Request record",
+				zap.String("time", st),
+				zap.Int("status", c.Status()),
+				zap.String("method", method),
+				zap.String("path", path),
+				zap.String("query", query),
+				zap.ByteString("body", b),
+				zap.String("ip", c.ClientIP()),
+				zap.String("user-agent", c.request.req.UserAgent()),
+				zap.Duration("latency", latency))
 
 			return err
 		}

@@ -1,17 +1,13 @@
 package hblade
 
 import (
-	"github.com/zatxm/hblade/log"
+	"go.uber.org/zap"
 )
 
-var Log log.Logger = log.NewPlog("debug")
+var Log *zap.Logger = initLog()
 
-func NewPlog(l string) log.Logger {
-	Log = log.NewPlog(l)
-	return Log
-}
-
-func NewFlog(l, filename string, maxSize int64) log.Logger {
-	Log = log.NewFlog(l, filename, maxSize)
-	return Log
+func initLog() *zap.Logger {
+	logger, _ := zap.NewDevelopment()
+	defer logger.Sync()
+	return logger
 }

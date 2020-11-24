@@ -1,9 +1,10 @@
 package hblade
 
 import (
-	"fmt"
 	"net/http/httputil"
 	"runtime"
+
+	"go.uber.org/zap"
 )
 
 // Recovery returns a middleware that recovers from any panics and writes a 500 if there was one.
@@ -20,8 +21,10 @@ func Recovery() Middleware {
 					if req != nil {
 						rawReq, _ = httputil.DumpRequest(req, false)
 					}
-					pl := fmt.Sprintf("http call panic: %s\n%v\n%s\n", string(rawReq), err, buf)
-					Log.Fatal(pl)
+					Log.Fatal("http call panic",
+						zap.ByteString("rawReq", rawReq),
+						zap.Any("error", err),
+						zap.ByteString("buf", buf))
 					c.Error(500, err)
 				}
 			}()

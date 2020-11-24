@@ -3,7 +3,6 @@ package hblade
 import (
 	stdContext "context"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"mime"
@@ -13,10 +12,12 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/zatxm/hblade/binding"
 	"github.com/zatxm/hblade/internal/bytesconv"
+	"go.uber.org/zap"
 )
 
 const (
@@ -39,11 +40,114 @@ type Context struct {
 	paramCount    int
 	modifierCount int
 	sameSite      http.SameSite
+	mu            sync.RWMutex
+	keys          map[string]interface{}
 }
 
 // 返回blade
 func (c *Context) B() *Blade {
 	return c.b
+}
+
+// Set is used to store a new key/value pair exclusively for this context.
+// It also lazy initializes  c.Keys if it was not used previously.
+func (c *Context) SetKey(key string, value interface{}) {
+	c.mu.Lock()
+	if c.keys == nil {
+		c.keys = make(map[string]interface{})
+	}
+
+	c.keys[key] = value
+	c.mu.Unlock()
+}
+
+// Get returns the value for the given key, ie: (value, true).
+// If the value does not exists it returns (nil, false)
+func (c *Context) GetKey(key string) (value interface{}, exists bool) {
+	c.mu.RLock()
+	value, exists = c.keys[key]
+	c.mu.RUnlock()
+	return
+}
+
+// GetString returns the value associated with the key as a string.
+func (c *Context) GetKeyString(key string) (s string) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		s, _ = val.(string)
+	}
+	return
+}
+
+// GetBool returns the value associated with the key as a boolean.
+func (c *Context) GetKeyBool(key string) (b bool) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		b, _ = val.(bool)
+	}
+	return
+}
+
+// GetInt returns the value associated with the key as an integer.
+func (c *Context) GetKeyInt(key string) (i int) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		i, _ = val.(int)
+	}
+	return
+}
+
+// GetInt64 returns the value associated with the key as an integer.
+func (c *Context) GetKeyInt64(key string) (i64 int64) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		i64, _ = val.(int64)
+	}
+	return
+}
+
+// GetFloat64 returns the value associated with the key as a float64.
+func (c *Context) GetKeyFloat64(key string) (f64 float64) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		f64, _ = val.(float64)
+	}
+	return
+}
+
+// GetTime returns the value associated with the key as time.
+func (c *Context) GetKeyTime(key string) (t time.Time) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		t, _ = val.(time.Time)
+	}
+	return
+}
+
+// GetDuration returns the value associated with the key as a duration.
+func (c *Context) GetKeyDuration(key string) (d time.Duration) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		d, _ = val.(time.Duration)
+	}
+	return
+}
+
+// GetStringSlice returns the value associated with the key as a slice of strings.
+func (c *Context) GetKeyStringSlice(key string) (ss []string) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		ss, _ = val.([]string)
+	}
+	return
+}
+
+// GetStringMap returns the value associated with the key as a map of interfaces.
+func (c *Context) GetKeyStringMap(key string) (sm map[string]interface{}) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		sm, _ = val.(map[string]interface{})
+	}
+	return
+}
+
+// GetStringMapString returns the value associated with the key as a map of strings.
+func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		sms, _ = val.(map[string]string)
+	}
+	return
 }
 
 // 返回字节处理
@@ -107,6 +211,18 @@ func (c *Context) addParameter(name string, value string) {
 
 // JSON encodes the object to a JSON string and responds.
 func (c *Context) JSON(value interface{}) error {
+	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
+	bytes, err := Json.Marshal(value)
+
+	if err != nil {
+		return err
+	}
+
+	return c.Bytes(bytes)
+}
+
+func (c *Context) JSONAndStatus(status int, value interface{}) error {
+	c.status = status
 	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
 	bytes, err := Json.Marshal(value)
 
@@ -185,11 +301,14 @@ func (c *Context) EventStream(stream *EventStream) error {
 					var err error
 					data, err = Json.Marshal(data)
 					if err != nil {
-						Log.Error(fmt.Sprintf("Failed encoding flush event data as JSON: %v", data))
+						Log.Error("Failed encoding flush event data as JSON",
+							zap.Any("json", data))
 					}
 				}
 
-				Log.Debug(fmt.Sprintf("flush event: %s\ndata: %s\n\n", event.Name, data))
+				Log.Debug("flush event",
+					zap.String("name", event.Name),
+					zap.Any("data", data))
 				flusher.Flush()
 			}
 		}
@@ -398,6 +517,11 @@ func (c *Context) Text(text string) error {
 	return c.String(text)
 }
 
+func (c *Context) ShouldBind(obj interface{}) error {
+	b := binding.Default(c.request.Method(), c.request.ContentType())
+	return c.ShouldBindWith(obj, b)
+}
+
 // ShouldBindJSON is a shortcut for c.ShouldBindWith(obj, binding.JSON).
 func (c *Context) ShouldBindJSON(obj interface{}) error {
 	return c.ShouldBindWith(obj, binding.JSON)
@@ -407,6 +531,11 @@ func (c *Context) ShouldBindJSON(obj interface{}) error {
 // See the binding package.
 func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
 	return b.Bind(c.request.req, obj)
+}
+
+// ShouldBindQuery is a shortcut for c.ShouldBindWith(obj, binding.Query).
+func (c *Context) ShouldBindQuery(obj interface{}) error {
+	return c.ShouldBindWith(obj, binding.Query)
 }
 
 // Bind checks the Content-Type to select a binding engine automatically,
