@@ -70,7 +70,6 @@ func (c *Context) GetKey(key string) (value interface{}, exists bool) {
 	return
 }
 
-// GetString returns the value associated with the key as a string.
 func (c *Context) GetKeyString(key string) (s string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		s, _ = val.(string)
@@ -78,7 +77,13 @@ func (c *Context) GetKeyString(key string) (s string) {
 	return
 }
 
-// GetBool returns the value associated with the key as a boolean.
+func (c *Context) GetKeyByte(key string) (s []byte) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		s, _ = val.([]byte)
+	}
+	return
+}
+
 func (c *Context) GetKeyBool(key string) (b bool) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		b, _ = val.(bool)
@@ -86,7 +91,6 @@ func (c *Context) GetKeyBool(key string) (b bool) {
 	return
 }
 
-// GetInt returns the value associated with the key as an integer.
 func (c *Context) GetKeyInt(key string) (i int) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		i, _ = val.(int)
@@ -94,7 +98,6 @@ func (c *Context) GetKeyInt(key string) (i int) {
 	return
 }
 
-// GetInt64 returns the value associated with the key as an integer.
 func (c *Context) GetKeyInt64(key string) (i64 int64) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		i64, _ = val.(int64)
@@ -102,7 +105,6 @@ func (c *Context) GetKeyInt64(key string) (i64 int64) {
 	return
 }
 
-// GetFloat64 returns the value associated with the key as a float64.
 func (c *Context) GetKeyFloat64(key string) (f64 float64) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		f64, _ = val.(float64)
@@ -110,7 +112,6 @@ func (c *Context) GetKeyFloat64(key string) (f64 float64) {
 	return
 }
 
-// GetTime returns the value associated with the key as time.
 func (c *Context) GetKeyTime(key string) (t time.Time) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		t, _ = val.(time.Time)
@@ -118,7 +119,6 @@ func (c *Context) GetKeyTime(key string) (t time.Time) {
 	return
 }
 
-// GetDuration returns the value associated with the key as a duration.
 func (c *Context) GetKeyDuration(key string) (d time.Duration) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		d, _ = val.(time.Duration)
@@ -126,7 +126,6 @@ func (c *Context) GetKeyDuration(key string) (d time.Duration) {
 	return
 }
 
-// GetStringSlice returns the value associated with the key as a slice of strings.
 func (c *Context) GetKeyStringSlice(key string) (ss []string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		ss, _ = val.([]string)
@@ -134,7 +133,6 @@ func (c *Context) GetKeyStringSlice(key string) (ss []string) {
 	return
 }
 
-// GetStringMap returns the value associated with the key as a map of interfaces.
 func (c *Context) GetKeyStringMap(key string) (sm map[string]interface{}) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		sm, _ = val.(map[string]interface{})
@@ -142,7 +140,6 @@ func (c *Context) GetKeyStringMap(key string) (sm map[string]interface{}) {
 	return
 }
 
-// GetStringMapString returns the value associated with the key as a map of strings.
 func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		sms, _ = val.(map[string]string)
