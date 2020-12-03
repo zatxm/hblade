@@ -1,6 +1,7 @@
 package hblade
 
 import (
+	"bytes"
 	stdContext "context"
 	"errors"
 	"io"
@@ -25,7 +26,8 @@ const (
 	gzipThreshold = 256
 
 	// 路由最大参数
-	maxParams = 64
+	maxParams    = 64
+	BodyBytesKey = "hblade_bodybyteskey"
 )
 
 // Context represents a request & response context.
@@ -527,7 +529,20 @@ func (c *Context) ShouldBindJSON(obj interface{}) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
-	return b.Bind(c.request.req, obj)
+	if c.request.Method() != "GET" {
+		if _, ok := c.GetKey(BodyBytesKey); !ok {
+			body, err := c.request.RawDataSetBody()
+			if err != nil {
+				return err
+			}
+			c.SetKey(BodyBytesKey, body)
+		}
+	}
+	err := b.Bind(c.request.req, obj)
+	if c.request.Method() != "GET" {
+		c.request.req.Body = ioutil.NopCloser(bytes.NewBuffer(c.GetKeyByte(BodyBytesKey)))
+	}
+	return err
 }
 
 // ShouldBindQuery is a shortcut for c.ShouldBindWith(obj, binding.Query).

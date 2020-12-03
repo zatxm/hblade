@@ -1,6 +1,7 @@
 package hblade
 
 import (
+	"bytes"
 	stdContext "context"
 	"io/ioutil"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 
 type Request interface {
 	RawData() ([]byte, error)
+	RawDataSetBody() ([]byte, error)
 	Context() stdContext.Context
 	Header(string) string
 	Host() string
@@ -24,8 +26,17 @@ type request struct {
 	req *http.Request
 }
 
-func (r *request) RawData() ([]byte, error) {
+func (r *request) RawData() (b []byte, err error) {
 	return ioutil.ReadAll(r.req.Body)
+}
+
+func (r *request) RawDataSetBody() (b []byte, err error) {
+	b, err = ioutil.ReadAll(r.req.Body)
+	if err != nil {
+		return
+	}
+	r.req.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+	return
 }
 
 func (r *request) Context() stdContext.Context {

@@ -1,11 +1,9 @@
 package hblade
 
 import (
-	"bytes"
 	"compress/gzip"
 	stdContext "context"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
@@ -332,8 +330,8 @@ func (b *Blade) EnableLogRequest() {
 			var b []byte
 			// log body. not get TODO
 			if method != "GET" {
-				b, _ = c.request.RawData()
-				c.request.req.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+				b, _ = c.request.RawDataSetBody()
+				c.SetKey(BodyBytesKey, b)
 			}
 
 			err := next(c)
