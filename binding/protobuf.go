@@ -5,9 +5,9 @@
 package binding
 
 import (
-	"io/ioutil"
 	"net/http"
 
+	"github.com/zatxm/hblade/internal"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -18,7 +18,7 @@ func (protobufBinding) Name() string {
 }
 
 func (b protobufBinding) Bind(req *http.Request, obj interface{}) error {
-	buf, err := ioutil.ReadAll(req.Body)
+	buf, err := internal.ReadAll(req.Body)
 	if err != nil {
 		return err
 	}

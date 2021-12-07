@@ -5,6 +5,8 @@ import (
 	stdContext "context"
 	"io/ioutil"
 	"net/http"
+
+	"github.com/zatxm/hblade/internal"
 )
 
 type Request interface {
@@ -27,11 +29,11 @@ type request struct {
 }
 
 func (r *request) RawData() (b []byte, err error) {
-	return ioutil.ReadAll(r.req.Body)
+	return internal.ReadAll(r.req.Body)
 }
 
 func (r *request) RawDataSetBody() (b []byte, err error) {
-	b, err = ioutil.ReadAll(r.req.Body)
+	b, err = internal.ReadAll(r.req.Body)
 	if err != nil {
 		return
 	}
