@@ -19,6 +19,7 @@ type dataType = Handler
 type tree struct {
 	root        treeNode
 	static      map[string]dataType
+	mcheck      map[string]int
 	canBeStatic [2048]bool
 }
 
@@ -27,9 +28,11 @@ func (tree *tree) add(path string, data dataType) {
 	if !strings.Contains(path, ":") && !strings.Contains(path, "*") {
 		if tree.static == nil {
 			tree.static = map[string]dataType{}
+			tree.mcheck = map[string]int{}
 		}
 
 		tree.static[path] = data
+		tree.mcheck[path] = 0
 		tree.canBeStatic[len(path)] = true
 		return
 	}
@@ -236,12 +239,17 @@ begin:
 // bind binds all handlers to a new one provided by the callback.
 func (tree *tree) bind(transform func(Handler) Handler) {
 	tree.root.each(func(node *treeNode) {
-		if node.data != nil {
+		if node.data != nil && node.gocheck != 1 {
 			node.data = transform(node.data)
+			node.gocheck = 1
 		}
 	})
 
-	for key, value := range tree.static {
-		tree.static[key] = transform(value)
+	for key, _ := range tree.static {
+		if tree.mcheck[key] == 0 {
+			value := tree.static[key]
+			tree.static[key] = transform(value)
+			tree.mcheck[key] = 1
+		}
 	}
 }

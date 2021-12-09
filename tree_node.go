@@ -1,10 +1,6 @@
 package hblade
 
-import (
-	"strings"
-
-	"go.uber.org/zap"
-)
+import "strings"
 
 // node types
 const (
@@ -24,6 +20,7 @@ type treeNode struct {
 	data       dataType
 	parameter  *treeNode
 	wildcard   *treeNode
+	gocheck    int
 }
 
 // split splits the node at the given index and inserts
@@ -265,7 +262,8 @@ func (node *treeNode) end(path string, data dataType, i int, offset int) (*treeN
 func (node *treeNode) each(callback func(*treeNode)) {
 	callback(node)
 
-	for _, child := range node.children {
+	for key, _ := range node.children {
+		child := node.children[key]
 		if child == nil {
 			continue
 		}
@@ -279,40 +277,5 @@ func (node *treeNode) each(callback func(*treeNode)) {
 
 	if node.wildcard != nil {
 		node.wildcard.each(callback)
-	}
-}
-
-// PrettyPrint prints a human-readable form of the tree to the given writer.
-func (node *treeNode) PrettyPrint() {
-	node.prettyPrint(-1)
-}
-
-// prettyPrint
-func (node *treeNode) prettyPrint(level int) {
-	prefix := ""
-
-	if level >= 0 {
-		prefix = strings.Repeat("  ", level) + "|_ "
-	}
-
-	Log.Info("prettyPrint",
-		zap.String("prefix", prefix),
-		zap.String("node.prefix", node.prefix),
-		zap.Bool("node.data?", node.data != nil))
-
-	for _, child := range node.children {
-		if child == nil {
-			continue
-		}
-
-		child.prettyPrint(level + 1)
-	}
-
-	if node.parameter != nil {
-		node.parameter.prettyPrint(level + 1)
-	}
-
-	if node.wildcard != nil {
-		node.wildcard.prettyPrint(level + 1)
 	}
 }

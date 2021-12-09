@@ -66,47 +66,55 @@ func (b *Blade) Gzip() bool {
 // Get registers your function to be called when the given GET path has been requested.
 func (b *Blade) Get(path string, handler Handler) {
 	b.router.Add(http.MethodGet, path, handler)
+	b.BindMiddleware()
 }
 
 // Post registers your function to be called when the given POST path has been requested.
 func (b *Blade) Post(path string, handler Handler) {
 	b.router.Add(http.MethodPost, path, handler)
+	b.BindMiddleware()
 }
 
 // Delete registers your function to be called when the given DELETE path has been requested.
 func (b *Blade) Delete(path string, handler Handler) {
 	b.router.Add(http.MethodDelete, path, handler)
+	b.BindMiddleware()
 }
 
 // Put registers your function to be called when the given PUT path has been requested.
 func (b *Blade) Put(path string, handler Handler) {
 	b.router.Add(http.MethodPut, path, handler)
+	b.BindMiddleware()
 }
 
 // Patch registers your function to be called when the given PATCH path has been requested.
 func (b *Blade) Patch(path string, handler Handler) {
 	b.router.Add(http.MethodPatch, path, handler)
+	b.BindMiddleware()
 }
 
 // Options registers your function to be called when the given OPTIONS path has been requested.
 func (b *Blade) Options(path string, handler Handler) {
 	b.router.Add(http.MethodOptions, path, handler)
+	b.BindMiddleware()
 }
 
 // Head registers your function to be called when the given HEAD path has been requested.
 func (b *Blade) Head(path string, handler Handler) {
 	b.router.Add(http.MethodHead, path, handler)
+	b.BindMiddleware()
 }
 
 // Any registers your function to be called with any http method.
 func (b *Blade) Any(path string, handler Handler) {
-	b.Get(path, handler)
-	b.Post(path, handler)
-	b.Delete(path, handler)
-	b.Put(path, handler)
-	b.Patch(path, handler)
-	b.Options(path, handler)
-	b.Head(path, handler)
+	b.router.Add(http.MethodGet, path, handler)
+	b.router.Add(http.MethodPost, path, handler)
+	b.router.Add(http.MethodDelete, path, handler)
+	b.router.Add(http.MethodPut, path, handler)
+	b.router.Add(http.MethodPatch, path, handler)
+	b.router.Add(http.MethodOptions, path, handler)
+	b.router.Add(http.MethodHead, path, handler)
+	b.BindMiddleware()
 }
 
 // Router returns the router used by the blade.
@@ -119,7 +127,6 @@ func (b *Blade) initRun() {
 		// Receive signals
 		signal.Notify(b.stop, os.Interrupt, syscall.SIGTERM)
 	}
-	b.BindMiddleware()
 }
 
 func (b *Blade) endRun() error {

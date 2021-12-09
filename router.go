@@ -62,12 +62,6 @@ func (router *Router) bind(transform func(Handler) Handler) {
 	router.options.bind(transform)
 }
 
-// Print shows a pretty print of the dynamic routes.
-func (router *Router) Print(method string) {
-	tree := router.selectTree(method)
-	tree.root.PrettyPrint()
-}
-
 // selectTree returns the tree by the given HTTP method.
 func (router *Router) selectTree(method string) *tree {
 	switch method {

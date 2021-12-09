@@ -4,7 +4,8 @@ import (
 	"bytes"
 	"io"
 	"sync"
-	"unsafe"
+
+	"github.com/zatxm/hblade/internal/bytesconv"
 )
 
 var pool = sync.Pool{
@@ -23,15 +24,5 @@ func ReadAll(r io.Reader) ([]byte, error) {
 	}
 	pool.Put(buffer)
 
-	return Str2bytes(string(buffer.Bytes())), nil
-}
-
-func Str2bytes(s string) []byte {
-	x := (*[2]uintptr)(unsafe.Pointer(&s))
-	h := [3]uintptr{x[0], x[1], x[1]}
-	return *(*[]byte)(unsafe.Pointer(&h))
-}
-
-func Bytes2str(b []byte) string {
-	return *(*string)(unsafe.Pointer(&b))
+	return bytesconv.StringToBytes(string(buffer.Bytes())), nil
 }
