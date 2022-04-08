@@ -32,6 +32,7 @@ type Blade struct {
 	contextPool    sync.Pool
 	gzipWriterPool sync.Pool
 	server         atomic.Value
+	noFunc         func(*Context) //404
 }
 
 // New creates a new blade.
@@ -40,6 +41,7 @@ func New() *Blade {
 		signAutoRun: false,
 		gzip:        false,
 		stop:        make(chan os.Signal, 1),
+		noFunc:      nil,
 	}
 
 	// Context pool
@@ -61,6 +63,10 @@ func (b *Blade) SetGzip(gzip bool) {
 // Get Gzip
 func (b *Blade) Gzip() bool {
 	return b.gzip
+}
+
+func (b *Blade) NoFunc(f func(*Context)) {
+	b.noFunc = f
 }
 
 // Get registers your function to be called when the given GET path has been requested.
@@ -286,7 +292,11 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	b.router.Lookup(request.Method, request.URL.Path, c)
 
 	if c.handler == nil {
-		response.WriteHeader(http.StatusNotFound)
+		if b.noFunc != nil {
+			b.noFunc(c)
+		} else {
+			response.WriteHeader(http.StatusNotFound)
+		}
 		c.Close()
 		return
 	}
