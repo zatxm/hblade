@@ -2,7 +2,7 @@ package binding
 
 import (
 	"bytes"
-	"fmt"
+	"errors"
 	"io"
 	"net/http"
 
@@ -28,18 +28,18 @@ func (jsonBinding) Name() string {
 	return "json"
 }
 
-func (jsonBinding) Bind(req *http.Request, obj interface{}) error {
+func (jsonBinding) Bind(req *http.Request, obj any) error {
 	if req == nil || req.Body == nil {
-		return fmt.Errorf("invalid request")
+		return errors.New("invalid request")
 	}
 	return decodeJSON(req.Body, obj)
 }
 
-func (jsonBinding) BindBody(body []byte, obj interface{}) error {
+func (jsonBinding) BindBody(body []byte, obj any) error {
 	return decodeJSON(bytes.NewReader(body), obj)
 }
 
-func decodeJSON(r io.Reader, obj interface{}) error {
+func decodeJSON(r io.Reader, obj any) error {
 	decoder := Json.NewDecoder(r)
 	if EnableDecoderUseNumber {
 		decoder.UseNumber()

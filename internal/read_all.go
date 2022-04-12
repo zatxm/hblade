@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"io"
 	"sync"
-
-	"github.com/zatxm/hblade/internal/bytesconv"
 )
 
 var pool = sync.Pool{
@@ -23,6 +21,5 @@ func ReadAll(r io.Reader) ([]byte, error) {
 		return []byte{}, err
 	}
 	pool.Put(buffer)
-
-	return bytesconv.StringToBytes(string(buffer.Bytes())), nil
+	return buffer.Bytes(), nil
 }
