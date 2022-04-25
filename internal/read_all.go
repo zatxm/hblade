@@ -21,5 +21,14 @@ func ReadAll(r io.Reader) ([]byte, error) {
 		return []byte{}, err
 	}
 	pool.Put(buffer)
-	return buffer.Bytes(), nil
+	temp := buffer.Bytes()
+	length := len(temp)
+	var body []byte
+	if cap(temp) > (length + length/10) {
+		body = make([]byte, length)
+		copy(body, temp)
+	} else {
+		body = temp
+	}
+	return body, nil
 }
