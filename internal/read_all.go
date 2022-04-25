@@ -8,13 +8,12 @@ import (
 
 var pool = sync.Pool{
 	New: func() interface{} {
-		return bytes.NewBuffer(make([]byte, 4096))
+		return bytes.NewBuffer(make([]byte, 10240))
 	},
 }
 
 func ReadAll(r io.Reader) ([]byte, error) {
 	buffer := pool.Get().(*bytes.Buffer)
-	buffer.Reset()
 	_, err := io.Copy(buffer, r)
 	if err != nil {
 		pool.Put(buffer)
