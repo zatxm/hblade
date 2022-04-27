@@ -14,6 +14,7 @@ var pool = sync.Pool{
 
 func ReadAll(r io.Reader) ([]byte, error) {
 	buffer := pool.Get().(*bytes.Buffer)
+	buffer.Reset()
 	_, err := io.Copy(buffer, r)
 	if err != nil {
 		pool.Put(buffer)
