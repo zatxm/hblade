@@ -136,8 +136,8 @@ func (b *Blade) initRun() {
 }
 
 func (b *Blade) endRun() error {
-	for _, callback := range b.onStart {
-		callback()
+	for key := range b.onStart {
+		b.onStart[key]()
 	}
 
 	if b.signAutoRun {
@@ -182,8 +182,8 @@ func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
 
 	}
 
-	for _, callback := range b.onStart {
-		callback()
+	for key := range b.onStart {
+		b.onStart[key]()
 	}
 
 	return b.endRun()
@@ -244,8 +244,8 @@ func (b *Blade) Shutdown() error {
 
 	err := shutdown(server)
 
-	for _, callback := range b.onShutdown {
-		callback()
+	for key := range b.onShutdown {
+		b.onShutdown[key]()
 	}
 	return err
 }
@@ -304,8 +304,8 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	err := c.handler(c)
 
 	if err != nil {
-		for _, callback := range b.onError {
-			callback(c, err)
+		for key := range b.onError {
+			b.onError[key](c, err)
 		}
 	}
 

@@ -262,7 +262,7 @@ func (node *treeNode) end(path string, data dataType, i int, offset int) (*treeN
 func (node *treeNode) each(callback func(*treeNode)) {
 	callback(node)
 
-	for key, _ := range node.children {
+	for key := range node.children {
 		child := node.children[key]
 		if child == nil {
 			continue

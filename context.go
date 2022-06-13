@@ -75,77 +75,77 @@ func (c *Context) GetKey(key string) (value interface{}, exists bool) {
 
 func (c *Context) GetKeyString(key string) (s string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		s, _ = val.(string)
+		s = val.(string)
 	}
 	return
 }
 
 func (c *Context) GetKeyByte(key string) (s []byte) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		s, _ = val.([]byte)
+		s = val.([]byte)
 	}
 	return
 }
 
 func (c *Context) GetKeyBool(key string) (b bool) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		b, _ = val.(bool)
+		b = val.(bool)
 	}
 	return
 }
 
 func (c *Context) GetKeyInt(key string) (i int) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		i, _ = val.(int)
+		i = val.(int)
 	}
 	return
 }
 
 func (c *Context) GetKeyInt64(key string) (i64 int64) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		i64, _ = val.(int64)
+		i64 = val.(int64)
 	}
 	return
 }
 
 func (c *Context) GetKeyFloat64(key string) (f64 float64) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		f64, _ = val.(float64)
+		f64 = val.(float64)
 	}
 	return
 }
 
 func (c *Context) GetKeyTime(key string) (t time.Time) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		t, _ = val.(time.Time)
+		t = val.(time.Time)
 	}
 	return
 }
 
 func (c *Context) GetKeyDuration(key string) (d time.Duration) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		d, _ = val.(time.Duration)
+		d = val.(time.Duration)
 	}
 	return
 }
 
 func (c *Context) GetKeyStringSlice(key string) (ss []string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		ss, _ = val.([]string)
+		ss = val.([]string)
 	}
 	return
 }
 
 func (c *Context) GetKeyStringMap(key string) (sm map[string]interface{}) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		sm, _ = val.(map[string]interface{})
+		sm = val.(map[string]interface{})
 	}
 	return
 }
 
 func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		sms, _ = val.(map[string]string)
+		sms = val.(map[string]string)
 	}
 	return
 }
@@ -225,7 +225,6 @@ func (c *Context) JSONAndStatus(status int, value interface{}) error {
 	c.status = status
 	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
 	bytes, err := Json.Marshal(value)
-
 	if err != nil {
 		return err
 	}
@@ -333,7 +332,8 @@ func (c *Context) File(file string) error {
 func (c *Context) Error(statusCode int, errorList ...interface{}) error {
 	c.status = statusCode
 
-	if len(errorList) == 0 {
+	errorLen := len(errorList)
+	if errorLen == 0 {
 		message := http.StatusText(statusCode)
 		_ = c.String(message)
 		return errors.New(message)
@@ -341,7 +341,8 @@ func (c *Context) Error(statusCode int, errorList ...interface{}) error {
 
 	messageBuffer := strings.Builder{}
 
-	for index, param := range errorList {
+	for index := range errorList {
+		param := errorList[index]
 		switch err := param.(type) {
 		case string:
 			messageBuffer.WriteString(err)
@@ -351,7 +352,7 @@ func (c *Context) Error(statusCode int, errorList ...interface{}) error {
 			continue
 		}
 
-		if index != len(errorList)-1 {
+		if index != errorLen-1 {
 			messageBuffer.WriteString(": ")
 		}
 	}
@@ -529,7 +530,10 @@ func (c *Context) ShouldBindJSON(obj interface{}) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
-	if c.request.Method() != "GET" {
+	method := c.request.Method()
+	isBodyRequest := false
+	if method != "GET" && method != "OPTIONS" && method != "HEAD" {
+		isBodyRequest = true
 		if _, ok := c.GetKey(BodyBytesKey); !ok {
 			body, err := c.request.RawDataSetBody()
 			if err != nil {
@@ -539,7 +543,7 @@ func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
 		}
 	}
 	err := b.Bind(c.request.req, obj)
-	if c.request.Method() != "GET" {
+	if isBodyRequest {
 		c.request.req.Body = ioutil.NopCloser(bytes.NewBuffer(c.GetKeyByte(BodyBytesKey)))
 	}
 	return err

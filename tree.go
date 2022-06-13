@@ -7,9 +7,9 @@ type controlFlow int
 
 // controlFlow values.
 const (
-	controlStop  controlFlow = 0
-	controlBegin controlFlow = 1
-	controlNext  controlFlow = 2
+	controlStop controlFlow = iota
+	controlBegin
+	controlNext
 )
 
 // dataType specifies which type of data we are going to save for each node.
@@ -245,7 +245,7 @@ func (tree *tree) bind(transform func(Handler) Handler) {
 		}
 	})
 
-	for key, _ := range tree.static {
+	for key := range tree.static {
 		if tree.mcheck[key] == 0 {
 			value := tree.static[key]
 			tree.static[key] = transform(value)
