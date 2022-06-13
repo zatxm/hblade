@@ -327,17 +327,18 @@ func (b *Blade) acquireGZipWriter(response io.Writer) *gzip.Writer {
 	return writer
 }
 
-// 绑定中间件
+// Binding middleware
 func (b *Blade) BindMiddleware() {
 	b.router.bind(func(handler Handler) Handler {
 		return handler.Bind(b.middleware...)
 	})
 }
 
-// 是否记录请求日志
+// Whether to record request logs
 func (b *Blade) EnableLogRequest() {
 	b.Use(func(next Handler) Handler {
 		return func(c *Context) error {
+			Log = LogWithCtr(c)
 			start := time.Now()
 			st := start.Format("2006-01-02 15:04:05")
 			path := c.request.Path()
@@ -345,8 +346,7 @@ func (b *Blade) EnableLogRequest() {
 			method := c.request.Method()
 
 			var b []byte
-			// log body. not get TODO
-			if method != "GET" {
+			if method != "GET" && method != "OPTIONS" && method != "HEAD" {
 				b, _ = c.request.RawDataSetBody()
 				c.SetKey(BodyBytesKey, b)
 			}
@@ -369,12 +369,14 @@ func (b *Blade) EnableLogRequest() {
 				zap.String("user-agent", c.request.req.UserAgent()),
 				zap.Duration("latency", latency))
 
+			Log = LogReleaseCtr(c)
+
 			return err
 		}
 	})
 }
 
-// 关闭服务
+// shutdown service
 func shutdown(server *http.Server) error {
 	if server == nil {
 		return errors.New("no server")
