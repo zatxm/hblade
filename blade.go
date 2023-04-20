@@ -111,6 +111,16 @@ func (b *Blade) Head(path string, handler Handler) {
 	b.BindMiddleware()
 }
 
+// Can bind static directory
+// h.Static("/static", "static/")
+func (b *Blade) Static(path, bind string) {
+	relativePath := path + "/*file"
+	handler := func(c *Context) error {
+		return c.File(bind + c.Get("file"))
+	}
+	b.Get(relativePath, handler)
+}
+
 // Any registers your function to be called with any http method.
 func (b *Blade) Any(path string, handler Handler) {
 	b.router.Add(http.MethodGet, path, handler)
