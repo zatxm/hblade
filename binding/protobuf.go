@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/zatxm/hblade/internal"
+	"github.com/zatxm/hblade/tools"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -15,7 +15,7 @@ func (protobufBinding) Name() string {
 }
 
 func (b protobufBinding) Bind(req *http.Request, obj any) error {
-	buf, err := internal.ReadAll(req.Body)
+	buf, err := tools.ReadAll(req.Body)
 	if err != nil {
 		return err
 	}

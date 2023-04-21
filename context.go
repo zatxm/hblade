@@ -17,8 +17,7 @@ import (
 	"time"
 
 	"github.com/zatxm/hblade/binding"
-	"github.com/zatxm/hblade/internal"
-	"github.com/zatxm/hblade/internal/bytesconv"
+	"github.com/zatxm/hblade/tools"
 	"go.uber.org/zap"
 )
 
@@ -463,7 +462,7 @@ func canCompress(contentType string) bool {
 // This will create an in-memory copy and calculate the E-Tag before sending the data.
 // Compression will be applied if necessary.
 func (c *Context) ReadAll(reader io.Reader) error {
-	data, err := internal.ReadAll(reader)
+	data, err := tools.ReadAll(reader)
 	if err != nil {
 		return err
 	}
@@ -498,7 +497,7 @@ func (c *Context) SetStatus(status int) {
 // String responds either with raw text or gzipped if the
 // text length is greater than the gzip threshold.
 func (c *Context) String(body string) error {
-	return c.Bytes(bytesconv.StringToBytes(body))
+	return c.Bytes(tools.StringToBytes(body))
 }
 
 // Request returns the HTTP request.
@@ -556,8 +555,10 @@ func (c *Context) ShouldBindQuery(obj interface{}) error {
 
 // Bind checks the Content-Type to select a binding engine automatically,
 // Depending the "Content-Type" header different bindings are used:
-//     "application/json" --> JSON binding
-//     "application/xml"  --> XML binding
+//
+//	"application/json" --> JSON binding
+//	"application/xml"  --> XML binding
+//
 // otherwise --> returns an error.
 // It parses the request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
 // It decodes the json payload into the struct specified as a pointer.

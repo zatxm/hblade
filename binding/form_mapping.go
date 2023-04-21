@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zatxm/hblade/internal/bytesconv"
+	"github.com/zatxm/hblade/tools"
 )
 
 var (
@@ -231,9 +231,9 @@ func setWithProperType(val string, value reflect.Value, field reflect.StructFiel
 		case time.Time:
 			return setTimeField(val, field, value)
 		}
-		return Json.Unmarshal(bytesconv.StringToBytes(val), value.Addr().Interface())
+		return Json.Unmarshal(tools.StringToBytes(val), value.Addr().Interface())
 	case reflect.Map:
-		return Json.Unmarshal(bytesconv.StringToBytes(val), value.Addr().Interface())
+		return Json.Unmarshal(tools.StringToBytes(val), value.Addr().Interface())
 	default:
 		return errUnknownType
 	}
