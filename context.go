@@ -149,6 +149,16 @@ func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
 	return
 }
 
+func (c *Context) GetKeyBodyJsonAny(key string) (sm interface{}) {
+	if val, ok := c.GetKey(key); ok && val != nil {
+		if v, ok := val.([]byte); ok {
+			Json.Unmarshal(v, &sm)
+		}
+
+	}
+	return
+}
+
 // 返回字节处理
 func (c *Context) Bytes(body []byte) error {
 	// If the request has been canceled by the client, stop.
