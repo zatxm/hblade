@@ -2,7 +2,6 @@ package hblade
 
 import (
 	"bytes"
-	stdContext "context"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -18,7 +17,6 @@ import (
 
 	"github.com/zatxm/hblade/binding"
 	"github.com/zatxm/hblade/tools"
-	"go.uber.org/zap"
 )
 
 const (
@@ -268,59 +266,6 @@ func (c *Context) CSS(text string) error {
 func (c *Context) JavaScript(code string) error {
 	c.response.SetHeader(contentTypeHeader, contentTypeJavaScript)
 	return c.String(code)
-}
-
-// 将服务器事件发送到客户端event-stream,用了http.Flusher
-// 类似sse功能
-func (c *Context) EventStream(stream *EventStream) error {
-	defer close(stream.Closed)
-
-	flusher, ok := c.response.rw.(http.Flusher)
-	if !ok {
-		return c.Error(http.StatusNotImplemented, "Flushing not supported")
-	}
-
-	// 捕捉断开连接
-	disconnectedContext := c.request.Context()
-	disconnectedContext, cancel := stdContext.WithDeadline(disconnectedContext, time.Now().Add(2*time.Hour))
-	disconnected := disconnectedContext.Done()
-	defer cancel()
-
-	header := c.response.rw.Header()
-	header.Set(contentTypeHeader, contentTypeEventStream)
-	header.Set(cacheControlHeader, "no-cache")
-	header.Set("Connection", "keep-alive")
-	header.Set("Access-Control-Allow-Origin", "*")
-	c.response.rw.WriteHeader(200)
-
-	for {
-		select {
-		case <-disconnected:
-			return nil
-
-		case event := <-stream.Events:
-			if event != nil {
-				data := event.Data
-
-				switch data.(type) {
-				case string, []byte:
-					// string和byte不用处理了
-				default:
-					var err error
-					data, err = Json.Marshal(data)
-					if err != nil {
-						Log.Error("Failed encoding flush event data as JSON",
-							zap.Any("json", data))
-					}
-				}
-
-				Log.Debug("flush event",
-					zap.String("name", event.Name),
-					zap.Any("data", data))
-				flusher.Flush()
-			}
-		}
-	}
 }
 
 // File sends the contents of a local file and determines its mime type by extension.
