@@ -1,15 +1,11 @@
 package hblade
 
 import (
-	"compress/gzip"
-	stdContext "context"
-	"io"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -21,27 +17,16 @@ import (
 var Json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Blade struct {
-	signAutoRun    bool //ctrl+c cannot be closed, it will start automatically
-	gzip           bool
-	router         Router
-	middleware     []Middleware
-	onStart        []func()
-	onShutdown     []func()
-	onError        []func(*Context, error)
-	stop           chan os.Signal
-	contextPool    sync.Pool
-	gzipWriterPool sync.Pool
-	server         atomic.Value
-	noFunc         func(*Context) //404
+	router      Router
+	middleware  []Middleware
+	contextPool sync.Pool
+	noFunc      func(*Context) //404
 }
 
 // New creates a new blade.
 func New() *Blade {
 	b := &Blade{
-		signAutoRun: false,
-		gzip:        false,
-		stop:        make(chan os.Signal, 1),
-		noFunc:      nil,
+		noFunc: nil,
 	}
 
 	// Context pool
@@ -50,19 +35,6 @@ func New() *Blade {
 	}
 
 	return b
-}
-func (b *Blade) SetSignAutoRun(auto bool) {
-	b.signAutoRun = auto
-}
-
-// Set whether to enable Gzip
-func (b *Blade) SetGzip(gzip bool) {
-	b.gzip = gzip
-}
-
-// Get Gzip
-func (b *Blade) Gzip() bool {
-	return b.gzip
 }
 
 func (b *Blade) NoFunc(f func(*Context)) {
@@ -138,150 +110,61 @@ func (b *Blade) Router() *Router {
 	return &b.router
 }
 
-func (b *Blade) initRun() {
-	if b.signAutoRun {
-		// Receive signals
-		signal.Notify(b.stop, os.Interrupt, syscall.SIGTERM)
-	}
-}
-
-func (b *Blade) endRun() error {
-	for key := range b.onStart {
-		b.onStart[key]()
-	}
-
-	if b.signAutoRun {
-		b.wait()
-		return b.Shutdown()
-	}
-	return nil
-}
-
 // Run starts your application with http.
-func (b *Blade) Run(addr ...string) error {
-	b.initRun()
-
-	address := resolveAddress(addr)
+func (b *Blade) Run(address string) error {
 	Log.Debug("Listening and serving HTTP",
 		zap.String("address", address))
 	server := &http.Server{
 		Addr:    address,
 		Handler: b,
 	}
-	b.server.Store(server)
 	if err := server.ListenAndServe(); err != nil {
-		return errors.Wrapf(err, "addrs: %v", addr)
+		return errors.Wrapf(err, "addrs: %v", address)
 	}
 
-	return b.endRun()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	return nil
 }
 
 // Run starts your application with https.
 func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
-	b.initRun()
-
 	Log.Debug("Listening and serving HTTPS",
 		zap.String("address", addr))
 	server := &http.Server{
 		Addr:    addr,
 		Handler: b,
 	}
-	b.server.Store(server)
 	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
 		return errors.Wrapf(err, "tls: %s/%s:%s", addr, certFile, keyFile)
 
 	}
 
-	for key := range b.onStart {
-		b.onStart[key]()
-	}
-
-	return b.endRun()
-}
-
-// Run starts your application with Unix.
-func (b *Blade) RunUnix(file string) error {
-	b.initRun()
-
-	Log.Debug("Listening and serving HTTP on unix:/",
-		zap.String("file", file))
-	os.Remove(file)
-	listener, err := net.Listen("unix", file)
-	if err != nil {
-		return errors.Wrapf(err, "unix: %s", file)
-	}
-	defer listener.Close()
-	server := &http.Server{Handler: b}
-	b.server.Store(server)
-	if err = server.Serve(listener); err != nil {
-		return errors.Wrapf(err, "unix: %s", file)
-	}
-
-	return b.endRun()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	return nil
 }
 
 // Run starts your application by given server and listener.
 func (b *Blade) RunServer(server *http.Server, l net.Listener) error {
-	b.initRun()
-
 	Log.Debug("Listening and serving HTTP on listener what's bind with address@",
 		zap.String("address", l.Addr().String()))
 	server.Handler = b
-	b.server.Store(server)
 	if err := server.Serve(l); err != nil {
 		return errors.Wrapf(err, "listen server: %+v/%+v", server, l)
 	}
 
-	return b.endRun()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+	<-stop
+	return nil
 }
 
 // Use adds middleware to your middleware chain.
 func (b *Blade) Use(middlewares ...Middleware) {
 	b.middleware = append(b.middleware, middlewares...)
-}
-
-// wait will make the process wait until it is killed.
-func (b *Blade) wait() {
-	<-b.stop
-}
-
-// Shutdown will gracefully shut down the server.
-func (b *Blade) Shutdown() error {
-	server := b.Server()
-	if server == nil {
-		return errors.New("no server")
-	}
-
-	err := shutdown(server)
-
-	for key := range b.onShutdown {
-		b.onShutdown[key]()
-	}
-	return err
-}
-
-// Server is used to load stored http server.
-func (b *Blade) Server() *http.Server {
-	server, ok := b.server.Load().(*http.Server)
-	if !ok {
-		return nil
-	}
-	return server
-}
-
-// OnStart registers a callback to be executed on server start.
-func (b *Blade) OnStart(callback func()) {
-	b.onStart = append(b.onStart, callback)
-}
-
-// OnEnd registers a callback to be executed on server shutdown.
-func (b *Blade) OnEnd(callback func()) {
-	b.onShutdown = append(b.onShutdown, callback)
-}
-
-// OnError registers a callback to be executed on server errors.
-func (b *Blade) OnError(callback func(*Context, error)) {
-	b.onError = append(b.onError, callback)
 }
 
 // newContext returns a new context from the pool.
@@ -311,30 +194,8 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	err := c.handler(c)
-
-	if err != nil {
-		for key := range b.onError {
-			b.onError[key](c, err)
-		}
-	}
-
+	c.handler(c)
 	c.Close()
-}
-
-// acquireGZipWriter will return a clean gzip writer from the pool.
-func (b *Blade) acquireGZipWriter(response io.Writer) *gzip.Writer {
-	var writer *gzip.Writer
-	obj := b.gzipWriterPool.Get()
-
-	if obj == nil {
-		writer, _ = gzip.NewWriterLevel(response, gzip.BestCompression)
-		return writer
-	}
-
-	writer = obj.(*gzip.Writer)
-	writer.Reset(response)
-	return writer
 }
 
 // Binding middleware
@@ -384,17 +245,4 @@ func (b *Blade) EnableLogRequest() {
 			return err
 		}
 	})
-}
-
-// shutdown service
-func shutdown(server *http.Server) error {
-	if server == nil {
-		return errors.New("no server")
-	}
-
-	// Add a timeout to the server shutdown
-	ctx, cancel := stdContext.WithTimeout(stdContext.Background(), 250*time.Millisecond)
-	defer cancel()
-
-	return errors.WithStack(server.Shutdown(ctx))
 }

@@ -2,6 +2,7 @@ package hblade
 
 import (
 	"bytes"
+	"compress/gzip"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -15,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zatxm/hblade/binding"
-	"github.com/zatxm/hblade/tools"
+	"hblade/binding"
+	"hblade/tools"
 )
 
 const (
@@ -186,7 +187,7 @@ func (c *Context) Bytes(body []byte) error {
 	// No GZip?
 	clientSupportsGZip := strings.Contains(c.request.Header(acceptEncodingHeader), "gzip")
 
-	if !c.b.gzip || !clientSupportsGZip || !canCompress(contentType) {
+	if !clientSupportsGZip || !canCompress(contentType) {
 		header.Set(contentLengthHeader, strconv.Itoa(len(body)))
 		c.response.rw.WriteHeader(c.status)
 		_, err := c.response.rw.Write(body)
@@ -198,12 +199,9 @@ func (c *Context) Bytes(body []byte) error {
 	c.response.rw.WriteHeader(c.status)
 
 	// Write response body
-	writer := c.b.acquireGZipWriter(c.response.rw)
+	writer, _ := gzip.NewWriterLevel(c.response.rw, gzip.BestCompression)
 	_, err := writer.Write(body)
 	writer.Close()
-
-	// Put the writer back into the pool
-	c.b.gzipWriterPool.Put(writer)
 
 	// Return the error value of the last Write call
 	return err
