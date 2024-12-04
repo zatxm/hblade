@@ -1,6 +1,6 @@
 module github.com/zatxm/hblade
 
-go 1.21.3
+go 1.22.2
 
 require (
 	github.com/go-playground/validator/v10 v10.23.0
