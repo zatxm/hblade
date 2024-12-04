@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"hblade/tools"
+	"github.com/zatxm/hblade/tools"
 )
 
 var (
