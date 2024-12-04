@@ -6,6 +6,7 @@ require (
 	github.com/go-playground/validator/v10 v10.23.0
 	github.com/google/uuid v1.6.0
 	github.com/json-iterator/go v1.1.12
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/pkg/errors v0.9.1
 	github.com/ugorji/go/codec v1.2.12
 	go.uber.org/zap v1.27.0
