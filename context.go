@@ -5,7 +5,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"io"
-	"io/ioutil"
 	"mime"
 	"net"
 	"net/http"
@@ -496,7 +495,7 @@ func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
 	}
 	err := b.Bind(c.request.req, obj)
 	if isBodyRequest {
-		c.request.req.Body = ioutil.NopCloser(bytes.NewBuffer(c.GetKeyByte(BodyBytesKey)))
+		c.request.req.Body = io.NopCloser(bytes.NewBuffer(c.GetKeyByte(BodyBytesKey)))
 	}
 	return err
 }
