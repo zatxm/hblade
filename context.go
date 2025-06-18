@@ -41,7 +41,7 @@ type Context struct {
 	modifierCount int
 	sameSite      http.SameSite
 	mu            sync.RWMutex
-	keys          map[string]interface{}
+	keys          map[string]any
 }
 
 // 返回blade
@@ -51,10 +51,10 @@ func (c *Context) B() *Blade {
 
 // Set is used to store a new key/value pair exclusively for this context.
 // It also lazy initializes  c.Keys if it was not used previously.
-func (c *Context) SetKey(key string, value interface{}) {
+func (c *Context) SetKey(key string, value any) {
 	c.mu.Lock()
 	if c.keys == nil {
-		c.keys = make(map[string]interface{})
+		c.keys = make(map[string]any)
 	}
 
 	c.keys[key] = value
@@ -63,7 +63,7 @@ func (c *Context) SetKey(key string, value interface{}) {
 
 // Get returns the value for the given key, ie: (value, true).
 // If the value does not exists it returns (nil, false)
-func (c *Context) GetKey(key string) (value interface{}, exists bool) {
+func (c *Context) GetKey(key string) (value any, exists bool) {
 	c.mu.RLock()
 	value, exists = c.keys[key]
 	c.mu.RUnlock()
@@ -133,9 +133,9 @@ func (c *Context) GetKeyStringSlice(key string) (ss []string) {
 	return
 }
 
-func (c *Context) GetKeyStringMap(key string) (sm map[string]interface{}) {
+func (c *Context) GetKeyStringMap(key string) (sm map[string]any) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		sm = val.(map[string]interface{})
+		sm = val.(map[string]any)
 	}
 	return
 }
@@ -147,7 +147,7 @@ func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
 	return
 }
 
-func (c *Context) GetKeyBodyJsonAny(key string) (sm interface{}) {
+func (c *Context) GetKeyBodyJsonAny(key string) (sm any) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		if v, ok := val.([]byte); ok {
 			Json.Unmarshal(v, &sm)
@@ -214,7 +214,7 @@ func (c *Context) addParameter(name string, value string) {
 }
 
 // JSON encodes the object to a JSON string and responds.
-func (c *Context) JSON(value interface{}) error {
+func (c *Context) JSON(value any) error {
 	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
 	bytes, err := Json.Marshal(value)
 
@@ -225,7 +225,7 @@ func (c *Context) JSON(value interface{}) error {
 	return c.Bytes(bytes)
 }
 
-func (c *Context) JSONAndStatus(status int, value interface{}) error {
+func (c *Context) JSONAndStatus(status int, value any) error {
 	c.status = status
 	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
 	bytes, err := Json.Marshal(value)
@@ -280,7 +280,7 @@ func (c *Context) File(file string) error {
 }
 
 // Error should be used for sending error messages to the client.
-func (c *Context) Error(statusCode int, errorList ...interface{}) error {
+func (c *Context) Error(statusCode int, errorList ...any) error {
 	c.status = statusCode
 
 	errorLen := len(errorList)
@@ -325,7 +325,7 @@ func (c *Context) SetPath(path string) {
 
 // Get retrieves an URL parameter.
 func (c *Context) Get(param string) string {
-	for i := 0; i < c.paramCount; i++ {
+	for i := range c.paramCount {
 		if c.paramNames[i] == param {
 			return c.paramValues[i]
 		}
@@ -468,19 +468,19 @@ func (c *Context) Text(text string) error {
 	return c.String(text)
 }
 
-func (c *Context) ShouldBind(obj interface{}) error {
+func (c *Context) ShouldBind(obj any) error {
 	b := binding.Default(c.request.Method(), c.request.ContentType())
 	return c.ShouldBindWith(obj, b)
 }
 
 // ShouldBindJSON is a shortcut for c.ShouldBindWith(obj, binding.JSON).
-func (c *Context) ShouldBindJSON(obj interface{}) error {
+func (c *Context) ShouldBindJSON(obj any) error {
 	return c.ShouldBindWith(obj, binding.JSON)
 }
 
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
-func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
+func (c *Context) ShouldBindWith(obj any, b binding.Binding) error {
 	method := c.request.Method()
 	isBodyRequest := false
 	if method != "GET" && method != "OPTIONS" && method != "HEAD" {
@@ -501,7 +501,7 @@ func (c *Context) ShouldBindWith(obj interface{}, b binding.Binding) error {
 }
 
 // ShouldBindQuery is a shortcut for c.ShouldBindWith(obj, binding.Query).
-func (c *Context) ShouldBindQuery(obj interface{}) error {
+func (c *Context) ShouldBindQuery(obj any) error {
 	return c.ShouldBindWith(obj, binding.Query)
 }
 
@@ -515,7 +515,7 @@ func (c *Context) ShouldBindQuery(obj interface{}) error {
 // It parses the request's body as JSON if Content-Type == "application/json" using JSON or XML as a JSON input.
 // It decodes the json payload into the struct specified as a pointer.
 // It writes a 400 error and sets Content-Type header "text/plain" in the response if input is not valid.
-func (c *Context) Bind(obj interface{}) error {
+func (c *Context) Bind(obj any) error {
 	b := binding.Default(c.Request().Method(), c.Request().Header(contentTypeHeader))
 	return c.MustBindWith(obj, b)
 }
@@ -523,7 +523,7 @@ func (c *Context) Bind(obj interface{}) error {
 // MustBindWith binds the passed struct pointer using the specified binding engine.
 // It will abort the request with HTTP 400 if any error occurs.
 // See the binding package.
-func (c *Context) MustBindWith(obj interface{}, b binding.Binding) error {
+func (c *Context) MustBindWith(obj any, b binding.Binding) error {
 	if err := c.ShouldBindWith(obj, b); err != nil {
 		return c.Error(http.StatusBadRequest, err)
 	}
