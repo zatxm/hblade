@@ -3,7 +3,7 @@ package hblade
 import (
 	"bytes"
 	stdContext "context"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/zatxm/hblade/tools"
@@ -37,7 +37,7 @@ func (r *request) RawDataSetBody() (b []byte, err error) {
 	if err != nil {
 		return
 	}
-	r.req.Body = ioutil.NopCloser(bytes.NewBuffer(b))
+	r.req.Body = io.NopCloser(bytes.NewBuffer(b))
 	return
 }
 

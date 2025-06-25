@@ -1,6 +1,6 @@
 package hblade
 
-type H map[string]interface{}
+type H map[string]any
 
 func filterFlags(content string) string {
 	for i := range content {

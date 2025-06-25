@@ -24,7 +24,7 @@ func (err SliceValidationError) Error() string {
 	}
 
 	var b strings.Builder
-	for i := 0; i < n; i++ {
+	for i := range n {
 		if err[i] != nil {
 			if b.Len() > 0 {
 				b.WriteString("\n")

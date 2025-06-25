@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	jsoniter "github.com/json-iterator/go"
+	"github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
