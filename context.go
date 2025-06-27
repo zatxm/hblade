@@ -30,18 +30,17 @@ const (
 
 // Context represents a request & response context.
 type Context struct {
-	b             *Blade
-	status        int
-	request       request
-	response      response
-	handler       Handler
-	paramNames    [maxParams]string
-	paramValues   [maxParams]string
-	paramCount    int
-	modifierCount int
-	sameSite      http.SameSite
-	mu            sync.RWMutex
-	keys          map[string]any
+	b           *Blade
+	status      int
+	request     request
+	response    response
+	handler     Handler
+	paramNames  [maxParams]string
+	paramValues [maxParams]string
+	paramCount  int
+	sameSite    http.SameSite
+	mu          sync.RWMutex
+	keys        map[string]any
 }
 
 // 返回blade

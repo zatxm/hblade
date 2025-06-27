@@ -1,87 +1,72 @@
 package hblade
 
-import (
-	"fmt"
-	"net/http"
-)
-
 // Router is a high-performance router.
-type Router struct {
-	get     tree
-	post    tree
-	delete  tree
-	put     tree
-	patch   tree
-	head    tree
-	connect tree
-	trace   tree
-	options tree
+type Router[T any] struct {
+	get     Tree[T]
+	post    Tree[T]
+	delete  Tree[T]
+	put     Tree[T]
+	patch   Tree[T]
+	head    Tree[T]
+	connect Tree[T]
+	trace   Tree[T]
+	options Tree[T]
+}
+
+// New creates a new router containing trees for every HTTP method.
+func NewRouter[T any]() *Router[T] {
+	return &Router[T]{}
 }
 
 // Add registers a new handler for the given method and path.
-func (router *Router) Add(method string, path string, handler Handler) {
+func (router *Router[T]) Add(method string, path string, handler T) {
 	tree := router.selectTree(method)
-	if tree == nil {
-		panic(fmt.Errorf("Unknown HTTP method: '%s'", method))
-	}
-
-	tree.add(path, handler)
+	tree.Add(path, handler)
 }
 
-// Find returns the handler for the given route.
-// This is only useful for testing purposes.
-// Use Lookup instead.
-func (router *Router) Find(method string, path string) Handler {
-	c := &Context{}
-	router.Lookup(method, path, c)
-	return c.handler
-}
-
-// Lookup finds the handler and parameters for the given route
-// and assigns them to the given context.
-func (router *Router) Lookup(method string, path string, c *Context) {
+// LookupNoAlloc finds the handler and parameters for the given route without using any memory allocations.
+func (router *Router[T]) Lookup(method string, path string, addParameter func(string, string)) T {
 	if method[0] == 'G' {
-		router.get.find(path, c)
-		return
+		return router.get.Lookup(path, addParameter)
 	}
 
 	tree := router.selectTree(method)
-	tree.find(path, c)
+	return tree.Lookup(path, addParameter)
 }
 
-// bind traverses all trees and calls the given function on every node.
-func (router *Router) bind(transform func(Handler) Handler) {
-	router.get.bind(transform)
-	router.post.bind(transform)
-	router.delete.bind(transform)
-	router.put.bind(transform)
-	router.patch.bind(transform)
-	router.head.bind(transform)
-	router.connect.bind(transform)
-	router.trace.bind(transform)
-	router.options.bind(transform)
+// Map traverses all trees and calls the given function on every node.
+func (router *Router[T]) Bind(transform func(T) T) {
+	router.get.Bind(transform)
+	router.post.Bind(transform)
+	router.delete.Bind(transform)
+	router.put.Bind(transform)
+	router.patch.Bind(transform)
+	router.head.Bind(transform)
+	router.connect.Bind(transform)
+	router.trace.Bind(transform)
+	router.options.Bind(transform)
 }
 
 // selectTree returns the tree by the given HTTP method.
-func (router *Router) selectTree(method string) *tree {
+func (router *Router[T]) selectTree(method string) *Tree[T] {
 	switch method {
-	case http.MethodGet:
+	case "GET":
 		return &router.get
-	case http.MethodPost:
+	case "POST":
 		return &router.post
-	case http.MethodDelete:
+	case "DELETE":
 		return &router.delete
-	case http.MethodPut:
+	case "PUT":
 		return &router.put
-	case http.MethodPatch:
+	case "PATCH":
 		return &router.patch
-	case http.MethodHead:
+	case "HEAD":
 		return &router.head
-	case http.MethodConnect:
+	case "CONNECT":
 		return &router.connect
-	case http.MethodTrace:
+	case "TRACE":
 		return &router.trace
-	case http.MethodOptions:
+	case "OPTIONS":
 		return &router.options
 	default:
 		return nil

@@ -1,42 +1,12 @@
 package hblade
 
-import "strings"
-
-// controlFlow tells the main loop what it should do next.
-type controlFlow int
-
-// controlFlow values.
-const (
-	controlStop controlFlow = iota
-	controlBegin
-	controlNext
-)
-
-// dataType specifies which type of data we are going to save for each node.
-type dataType = Handler
-
-// tree represents a radix tree.
-type tree struct {
-	root        treeNode
-	static      map[string]dataType
-	mcheck      map[string]int
-	canBeStatic [2048]bool
+// Tree represents a radix tree.
+type Tree[T any] struct {
+	root treeNode[T]
 }
 
-// add adds a new element to the tree.
-func (tree *tree) add(path string, data dataType) {
-	if !strings.Contains(path, ":") && !strings.Contains(path, "*") {
-		if tree.static == nil {
-			tree.static = map[string]dataType{}
-			tree.mcheck = map[string]int{}
-		}
-
-		tree.static[path] = data
-		tree.mcheck[path] = 0
-		tree.canBeStatic[len(path)] = true
-		return
-	}
-
+// Add adds a new element to the tree.
+func (tree *Tree[T]) Add(path string, data T) {
 	// Search tree for equal parts until we can no longer proceed
 	i := 0
 	offset := 0
@@ -56,17 +26,8 @@ func (tree *tree) add(path string, data dataType) {
 
 			// When we hit a separator, we'll search for a fitting child.
 			if path[i] == separator {
-				var control controlFlow
-				node, offset, control = node.end(path, data, i, offset)
-
-				switch control {
-				case controlStop:
-					return
-				case controlBegin:
-					goto begin
-				case controlNext:
-					goto next
-				}
+				node, offset, _ = node.end(path, data, i, offset)
+				goto next
 			}
 
 		default:
@@ -90,15 +51,15 @@ func (tree *tree) add(path string, data dataType) {
 			// node: /|
 			// path: /|blog
 			if i-offset == len(node.prefix) {
-				var control controlFlow
+				var control flow
 				node, offset, control = node.end(path, data, i, offset)
 
 				switch control {
-				case controlStop:
+				case flowStop:
 					return
-				case controlBegin:
+				case flowBegin:
 					goto begin
-				case controlNext:
+				case flowNext:
 					goto next
 				}
 			}
@@ -117,52 +78,36 @@ func (tree *tree) add(path string, data dataType) {
 	}
 }
 
-// find finds the data for the given path and assigns it to c.handler, if available.
-func (tree *tree) find(path string, c *Context) {
-	if tree.canBeStatic[len(path)] {
-		handler, found := tree.static[path]
-
-		if found {
-			c.handler = handler
-			return
-		}
-	}
-
+// Lookup finds the data for the given path without using any memory allocations.
+func (tree *Tree[T]) Lookup(path string, addParameter func(key string, value string)) T {
 	var (
-		i                  uint
-		offset             uint
-		lastWildcardOffset uint
-		lastWildcard       *treeNode
-		node               = &tree.root
+		i             uint
+		parameterPath string
+		wildcardPath  string
+		parameter     *treeNode[T]
+		wildcard      *treeNode[T]
+		node          = &tree.root
 	)
+
+	// Skip the first loop iteration if the starting characters are equal
+	if len(path) > 0 && len(node.prefix) > 0 && path[0] == node.prefix[0] {
+		i = 1
+	}
 
 begin:
 	// Search tree for equal parts until we can no longer proceed
-	for {
-		// We reached the end.
-		if i == uint(len(path)) {
-			// node: /blog|
-			// path: /blog|
-			if i-offset == uint(len(node.prefix)) {
-				c.handler = node.data
-				return
-			}
-
-			// node: /blog|feed
-			// path: /blog|
-			c.handler = nil
-			return
-		}
-
+	for i < uint(len(path)) {
 		// The node we just checked is entirely included in our path.
 		// node: /|
 		// path: /|blog
-		if i-offset == uint(len(node.prefix)) {
+		if i == uint(len(node.prefix)) {
 			if node.wildcard != nil {
-				lastWildcard = node.wildcard
-				lastWildcardOffset = i
+				wildcard = node.wildcard
+				wildcardPath = path[i:]
 			}
 
+			parameter = node.parameter
+			parameterPath = path[i:]
 			char := path[i]
 
 			if char >= node.startIndex && char < node.endIndex {
@@ -170,8 +115,8 @@ begin:
 
 				if index != 0 {
 					node = node.children[index]
-					offset = i
-					i++
+					path = path[i:]
+					i = 1
 					continue
 				}
 			}
@@ -180,76 +125,72 @@ begin:
 			// path: /|blog
 			if node.parameter != nil {
 				node = node.parameter
-				offset = i
-				i++
+				path = path[i:]
+				i = 1
 
-				for {
-					// We reached the end.
-					if i == uint(len(path)) {
-						c.addParameter(node.prefix, path[offset:i])
-						c.handler = node.data
-						return
-					}
-
+				for i < uint(len(path)) {
 					// node: /:id|/posts
 					// path: /123|/posts
 					if path[i] == separator {
-						c.addParameter(node.prefix, path[offset:i])
+						addParameter(node.prefix, path[:i])
 						index := node.indices[separator-node.startIndex]
 						node = node.children[index]
-						offset = i
-						i++
+						path = path[i:]
+						i = 1
 						goto begin
 					}
 
 					i++
 				}
+
+				addParameter(node.prefix, path[:i])
+				return node.data
 			}
 
 			// node: /|*any
 			// path: /|image.png
-			if node.wildcard != nil {
-				c.addParameter(node.wildcard.prefix, path[i:])
-				c.handler = node.wildcard.data
-				return
-			}
-
-			c.handler = nil
-			return
+			goto notFound
 		}
 
 		// We got a conflict.
 		// node: /b|ag
 		// path: /b|riefcase
-		if path[i] != node.prefix[i-offset] {
-			if lastWildcard != nil {
-				c.addParameter(lastWildcard.prefix, path[lastWildcardOffset:])
-				c.handler = lastWildcard.data
-				return
-			}
-
-			c.handler = nil
-			return
+		if path[i] != node.prefix[i] {
+			goto notFound
 		}
 
 		i++
 	}
+
+	// node: /blog|
+	// path: /blog|
+	if i == uint(len(node.prefix)) {
+		return node.data
+	}
+
+	// node: /|*any
+	// path: /|image.png
+notFound:
+	if parameter != nil {
+		addParameter(parameter.prefix, parameterPath)
+		return parameter.data
+	}
+
+	if wildcard != nil {
+		addParameter(wildcard.prefix, wildcardPath)
+		return wildcard.data
+	}
+
+	var empty T
+	return empty
 }
 
-// bind binds all handlers to a new one provided by the callback.
-func (tree *tree) bind(transform func(Handler) Handler) {
-	tree.root.each(func(node *treeNode) {
-		if node.data != nil && node.gocheck != 1 {
+// Bind all handlers to a new one provided by the callback.
+func (tree *Tree[T]) Bind(transform func(T) T) {
+	tree.root.each(func(node *treeNode[T]) {
+		if !node.checked {
 			node.data = transform(node.data)
-			node.gocheck = 1
+			node.checked = true
 		}
 	})
-
-	for key := range tree.static {
-		if tree.mcheck[key] == 0 {
-			value := tree.static[key]
-			tree.static[key] = transform(value)
-			tree.mcheck[key] = 1
-		}
-	}
 }

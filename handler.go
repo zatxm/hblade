@@ -2,11 +2,11 @@ package hblade
 
 type Handler func(*Context) error
 
-func (handler Handler) Bind(middleware ...Middleware) Handler {
+func (h Handler) Bind(middleware ...Middleware) Handler {
 	l := len(middleware) - 1
 	for i := l; i >= 0; i-- {
-		handler = middleware[i](handler)
+		h = middleware[i](h)
 	}
 
-	return handler
+	return h
 }

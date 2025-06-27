@@ -10,24 +10,24 @@ const (
 )
 
 // treeNode represents a radix tree node.
-type treeNode struct {
+type treeNode[T any] struct {
+	prefix     string
+	data       T
+	children   []*treeNode[T]
+	parameter  *treeNode[T]
+	wildcard   *treeNode[T]
+	indices    []uint8
 	startIndex uint8
 	endIndex   uint8
 	kind       byte
-	prefix     string
-	indices    []uint8
-	children   []*treeNode
-	data       dataType
-	parameter  *treeNode
-	wildcard   *treeNode
-	gocheck    int
+	checked    bool
 }
 
 // split splits the node at the given index and inserts
 // a new child node with the given path and data.
 // If path is empty, it will not create another child node
 // and instead assign the data directly to the node.
-func (node *treeNode) split(index int, path string, data dataType) {
+func (node *treeNode[T]) split(index int, path string, data T) {
 	// Create split node with the remaining string
 	splitNode := node.clone(node.prefix[index:])
 
@@ -49,8 +49,8 @@ func (node *treeNode) split(index int, path string, data dataType) {
 }
 
 // clone clones the node with a new prefix.
-func (node *treeNode) clone(prefix string) *treeNode {
-	return &treeNode{
+func (node *treeNode[T]) clone(prefix string) *treeNode[T] {
+	return &treeNode[T]{
 		prefix:     prefix,
 		data:       node.data,
 		indices:    node.indices,
@@ -64,9 +64,10 @@ func (node *treeNode) clone(prefix string) *treeNode {
 }
 
 // reset resets the existing node data.
-func (node *treeNode) reset(prefix string) {
+func (node *treeNode[T]) reset(prefix string) {
+	var empty T
 	node.prefix = prefix
-	node.data = nil
+	node.data = empty
 	node.parameter = nil
 	node.wildcard = nil
 	node.kind = 0
@@ -77,7 +78,7 @@ func (node *treeNode) reset(prefix string) {
 }
 
 // addChild adds a child tree.
-func (node *treeNode) addChild(child *treeNode) {
+func (node *treeNode[T]) addChild(child *treeNode[T]) {
 	if len(node.children) == 0 {
 		node.children = append(node.children, nil)
 	}
@@ -118,19 +119,19 @@ func (node *treeNode) addChild(child *treeNode) {
 }
 
 // addTrailingSlash adds a trailing slash with the same data.
-func (node *treeNode) addTrailingSlash(data dataType) {
+func (node *treeNode[T]) addTrailingSlash(data T) {
 	if strings.HasSuffix(node.prefix, "/") || node.kind == wildcard || (separator >= node.startIndex && separator < node.endIndex && node.indices[separator-node.startIndex] != 0) {
 		return
 	}
 
-	node.addChild(&treeNode{
+	node.addChild(&treeNode[T]{
 		prefix: "/",
 		data:   data,
 	})
 }
 
 // append appends the given path to the tree.
-func (node *treeNode) append(path string, data dataType) {
+func (node *treeNode[T]) append(path string, data T) {
 	// At this point, all we know is that somewhere
 	// in the remaining string we have parameters.
 	// node: /user|
@@ -155,10 +156,11 @@ func (node *treeNode) append(path string, data dataType) {
 			if node.prefix == "" {
 				node.prefix = path
 				node.data = data
+				node.addTrailingSlash(data)
 				return
 			}
 
-			child := &treeNode{
+			child := &treeNode[T]{
 				prefix: path,
 				data:   data,
 			}
@@ -177,7 +179,7 @@ func (node *treeNode) append(path string, data dataType) {
 				paramEnd = len(path)
 			}
 
-			child := &treeNode{
+			child := &treeNode[T]{
 				prefix: path[1:paramEnd],
 				kind:   path[paramStart],
 			}
@@ -208,7 +210,7 @@ func (node *treeNode) append(path string, data dataType) {
 		}
 
 		// Add a normal node with the path before the parameter start.
-		child := &treeNode{
+		child := &treeNode[T]{
 			prefix: path[:paramStart],
 		}
 
@@ -226,7 +228,8 @@ func (node *treeNode) append(path string, data dataType) {
 
 // end is called when the node was fully parsed
 // and needs to decide the next control flow.
-func (node *treeNode) end(path string, data dataType, i int, offset int) (*treeNode, int, controlFlow) {
+// end is only called from `tree.Add`.
+func (node *treeNode[T]) end(path string, data T, i int, offset int) (*treeNode[T], int, flow) {
 	char := path[i]
 
 	if char >= node.startIndex && char < node.endIndex {
@@ -235,7 +238,7 @@ func (node *treeNode) end(path string, data dataType, i int, offset int) (*treeN
 		if index != 0 {
 			node = node.children[index]
 			offset = i
-			return node, offset, controlNext
+			return node, offset, flowNext
 		}
 	}
 
@@ -243,27 +246,27 @@ func (node *treeNode) end(path string, data dataType, i int, offset int) (*treeN
 	// If no prefix is set, this is the starting node.
 	if node.prefix == "" {
 		node.append(path[i:], data)
-		return node, offset, controlStop
+		return node, offset, flowStop
 	}
 
 	// node: /user/|:id
 	// path: /user/|:id/profile
-	if node.parameter != nil {
+	if node.parameter != nil && path[i] == parameter {
 		node = node.parameter
 		offset = i
-		return node, offset, controlBegin
+		return node, offset, flowBegin
 	}
 
 	node.append(path[i:], data)
-	return node, offset, controlStop
+	return node, offset, flowStop
 }
 
 // each traverses the tree and calls the given function on every node.
-func (node *treeNode) each(callback func(*treeNode)) {
+func (node *treeNode[T]) each(callback func(*treeNode[T])) {
 	callback(node)
 
-	for key := range node.children {
-		child := node.children[key]
+	for i := range node.children {
+		child := node.children[i]
 		if child == nil {
 			continue
 		}

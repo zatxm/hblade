@@ -1,6 +1,12 @@
 package hblade
 
+type flow int
+
 const (
+	flowStop flow = iota
+	flowBegin
+	flowNext
+
 	cacheControlHeader            = "Cache-Control"
 	cacheControlAlwaysValidate    = "must-revalidate"
 	cacheControlMedia             = "public, max-age=13824000"

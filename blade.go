@@ -17,28 +17,33 @@ import (
 var Json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Blade struct {
-	router      Router
-	middleware  []Middleware
-	contextPool sync.Pool
-	noFunc      func(*Context) //404
+	router       *Router[Handler]
+	middleware   []Middleware
+	contextPool  sync.Pool
+	notFoundFn   func(*Context) //404
+	errorHandler func(*Context, error)
 }
 
 // New creates a new blade.
 func New() *Blade {
 	b := &Blade{
-		noFunc: nil,
+		router:     &Router[Handler]{},
+		notFoundFn: nil,
+		errorHandler: func(c *Context, err error) {
+			Log.Error("Error in handler",
+				zap.Error(err),
+				zap.String("path", c.request.Path()))
+		},
 	}
 
 	// Context pool
-	b.contextPool.New = func() interface{} {
-		return &Context{b: b}
-	}
+	b.contextPool.New = func() any { return &Context{b: b} }
 
 	return b
 }
 
-func (b *Blade) NoFunc(f func(*Context)) {
-	b.noFunc = f
+func (b *Blade) NotFoundFn(f func(*Context)) {
+	b.notFoundFn = f
 }
 
 // Get registers your function to be called when the given GET path has been requested.
@@ -106,8 +111,8 @@ func (b *Blade) Any(path string, handler Handler) {
 }
 
 // Router returns the router used by the blade.
-func (b *Blade) Router() *Router {
-	return &b.router
+func (b *Blade) Router() *Router[Handler] {
+	return b.router
 }
 
 // Run starts your application with http.
@@ -174,7 +179,6 @@ func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context 
 	c.request.req = req
 	c.response.rw = res
 	c.paramCount = 0
-	c.modifierCount = 0
 	return c
 }
 
@@ -182,11 +186,10 @@ func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context 
 func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	c := b.newContext(request, response)
 
-	b.router.Lookup(request.Method, request.URL.Path, c)
-
+	c.handler = b.router.Lookup(request.Method, request.URL.Path, c.addParameter)
 	if c.handler == nil {
-		if b.noFunc != nil {
-			b.noFunc(c)
+		if b.notFoundFn != nil {
+			b.notFoundFn(c)
 		} else {
 			response.WriteHeader(http.StatusNotFound)
 		}
@@ -194,13 +197,16 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	c.handler(c)
+	err := c.handler(c)
+	if err != nil {
+		b.errorHandler(c, err)
+	}
 	c.Close()
 }
 
 // Binding middleware
 func (b *Blade) BindMiddleware() {
-	b.router.bind(func(handler Handler) Handler {
+	b.router.Bind(func(handler Handler) Handler {
 		return handler.Bind(b.middleware...)
 	})
 }
