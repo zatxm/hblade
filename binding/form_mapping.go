@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/zatxm/hblade/tools"
+	"github.com/zatxm/hblade/v2/tools"
 )
 
 var (

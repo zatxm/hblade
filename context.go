@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zatxm/hblade/binding"
-	"github.com/zatxm/hblade/tools"
+	"github.com/zatxm/hblade/v2/binding"
+	"github.com/zatxm/hblade/v2/tools"
 )
 
 const (
