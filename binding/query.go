@@ -4,7 +4,7 @@ import (
 	"net/url"
 
 	"github.com/valyala/fasthttp"
-	"github.com/zatxm/hblade/v2/tools"
+	"github.com/zatxm/hblade/tools"
 )
 
 type queryBinding struct{}

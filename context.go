@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/valyala/fasthttp"
-	"github.com/zatxm/hblade/v2/binding"
-	"github.com/zatxm/hblade/v2/tools"
+	"github.com/zatxm/hblade/binding"
+	"github.com/zatxm/hblade/tools"
 )
 
 const (

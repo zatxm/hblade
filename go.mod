@@ -1,4 +1,4 @@
-module github.com/zatxm/hblade/v2
+module github.com/zatxm/hblade
 
 go 1.24.3
 

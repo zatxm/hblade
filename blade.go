@@ -10,7 +10,7 @@ import (
 	"github.com/json-iterator/go"
 	"github.com/pkg/errors"
 	"github.com/valyala/fasthttp"
-	"github.com/zatxm/hblade/v2/tools"
+	"github.com/zatxm/hblade/tools"
 	"go.uber.org/zap"
 )
 
