@@ -1,8 +1,6 @@
 package hblade
 
 import (
-	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -11,6 +9,8 @@ import (
 
 	"github.com/json-iterator/go"
 	"github.com/pkg/errors"
+	"github.com/valyala/fasthttp"
+	"github.com/zatxm/hblade/v2/tools"
 	"go.uber.org/zap"
 )
 
@@ -32,7 +32,7 @@ func New() *Blade {
 		errorHandler: func(c *Context, err error) {
 			Log.Error("Error in handler",
 				zap.Error(err),
-				zap.String("path", c.request.Path()))
+				zap.String("path", c.Path()))
 		},
 	}
 
@@ -48,43 +48,43 @@ func (b *Blade) NotFoundFn(f func(*Context)) {
 
 // Get registers your function to be called when the given GET path has been requested.
 func (b *Blade) Get(path string, handler Handler) {
-	b.router.Add(http.MethodGet, path, handler)
+	b.router.Add("GET", path, handler)
 	b.BindMiddleware()
 }
 
 // Post registers your function to be called when the given POST path has been requested.
 func (b *Blade) Post(path string, handler Handler) {
-	b.router.Add(http.MethodPost, path, handler)
+	b.router.Add("POST", path, handler)
 	b.BindMiddleware()
 }
 
 // Delete registers your function to be called when the given DELETE path has been requested.
 func (b *Blade) Delete(path string, handler Handler) {
-	b.router.Add(http.MethodDelete, path, handler)
+	b.router.Add("DELETE", path, handler)
 	b.BindMiddleware()
 }
 
 // Put registers your function to be called when the given PUT path has been requested.
 func (b *Blade) Put(path string, handler Handler) {
-	b.router.Add(http.MethodPut, path, handler)
+	b.router.Add("PUT", path, handler)
 	b.BindMiddleware()
 }
 
 // Patch registers your function to be called when the given PATCH path has been requested.
 func (b *Blade) Patch(path string, handler Handler) {
-	b.router.Add(http.MethodPatch, path, handler)
+	b.router.Add("PATCH", path, handler)
 	b.BindMiddleware()
 }
 
 // Options registers your function to be called when the given OPTIONS path has been requested.
 func (b *Blade) Options(path string, handler Handler) {
-	b.router.Add(http.MethodOptions, path, handler)
+	b.router.Add("OPTIONS", path, handler)
 	b.BindMiddleware()
 }
 
 // Head registers your function to be called when the given HEAD path has been requested.
 func (b *Blade) Head(path string, handler Handler) {
-	b.router.Add(http.MethodHead, path, handler)
+	b.router.Add("HEAD", path, handler)
 	b.BindMiddleware()
 }
 
@@ -100,13 +100,13 @@ func (b *Blade) Static(path, bind string) {
 
 // Any registers your function to be called with any http method.
 func (b *Blade) Any(path string, handler Handler) {
-	b.router.Add(http.MethodGet, path, handler)
-	b.router.Add(http.MethodPost, path, handler)
-	b.router.Add(http.MethodDelete, path, handler)
-	b.router.Add(http.MethodPut, path, handler)
-	b.router.Add(http.MethodPatch, path, handler)
-	b.router.Add(http.MethodOptions, path, handler)
-	b.router.Add(http.MethodHead, path, handler)
+	b.router.Add("GET", path, handler)
+	b.router.Add("POST", path, handler)
+	b.router.Add("DELETE", path, handler)
+	b.router.Add("PUT", path, handler)
+	b.router.Add("PATCH", path, handler)
+	b.router.Add("OPTIONS", path, handler)
+	b.router.Add("HEAD", path, handler)
 	b.BindMiddleware()
 }
 
@@ -115,15 +115,33 @@ func (b *Blade) Router() *Router[Handler] {
 	return b.router
 }
 
+func (b *Blade) handle() func(*fasthttp.RequestCtx) {
+	return func(ctx *fasthttp.RequestCtx) {
+		c := b.newContext(ctx)
+		c.handler = b.router.Lookup(tools.BytesToString(ctx.Method()), tools.BytesToString(ctx.Path()), c.addParameter)
+		if c.handler == nil {
+			if b.notFoundFn != nil {
+				b.notFoundFn(c)
+			} else {
+				ctx.SetStatusCode(404)
+			}
+			c.Close()
+			return
+		}
+
+		err := c.handler(c)
+		if err != nil {
+			b.errorHandler(c, err)
+		}
+		c.Close()
+	}
+}
+
 // Run starts your application with http.
 func (b *Blade) Run(address string) error {
-	Log.Debug("Listening and serving HTTP",
-		zap.String("address", address))
-	server := &http.Server{
-		Addr:    address,
-		Handler: b,
-	}
-	if err := server.ListenAndServe(); err != nil {
+	Log.Debug("Listening and serving HTTP", zap.String("address", address))
+
+	if err := fasthttp.ListenAndServe(address, b.handle()); err != nil {
 		return errors.Wrapf(err, "addrs: %v", address)
 	}
 
@@ -135,30 +153,11 @@ func (b *Blade) Run(address string) error {
 
 // Run starts your application with https.
 func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
-	Log.Debug("Listening and serving HTTPS",
-		zap.String("address", addr))
-	server := &http.Server{
-		Addr:    addr,
-		Handler: b,
-	}
-	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
+	Log.Debug("Listening and serving HTTPS", zap.String("address", addr))
+
+	if err := fasthttp.ListenAndServeTLS(addr, certFile, keyFile, b.handle()); err != nil {
 		return errors.Wrapf(err, "tls: %s/%s:%s", addr, certFile, keyFile)
 
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	return nil
-}
-
-// Run starts your application by given server and listener.
-func (b *Blade) RunServer(server *http.Server, l net.Listener) error {
-	Log.Debug("Listening and serving HTTP on listener what's bind with address@",
-		zap.String("address", l.Addr().String()))
-	server.Handler = b
-	if err := server.Serve(l); err != nil {
-		return errors.Wrapf(err, "listen server: %+v/%+v", server, l)
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -173,35 +172,12 @@ func (b *Blade) Use(middlewares ...Middleware) {
 }
 
 // newContext returns a new context from the pool.
-func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context {
+func (b *Blade) newContext(ctx *fasthttp.RequestCtx) *Context {
 	c := b.contextPool.Get().(*Context)
-	c.status = http.StatusOK
-	c.request.req = req
-	c.response.rw = res
+	c.status = 200
+	c.ctx = ctx
 	c.paramCount = 0
 	return c
-}
-
-// ServeHTTP responds to the given request.
-func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
-	c := b.newContext(request, response)
-
-	c.handler = b.router.Lookup(request.Method, request.URL.Path, c.addParameter)
-	if c.handler == nil {
-		if b.notFoundFn != nil {
-			b.notFoundFn(c)
-		} else {
-			response.WriteHeader(http.StatusNotFound)
-		}
-		c.Close()
-		return
-	}
-
-	err := c.handler(c)
-	if err != nil {
-		b.errorHandler(c, err)
-	}
-	c.Close()
 }
 
 // Binding middleware
@@ -218,13 +194,12 @@ func (b *Blade) EnableLogRequest() {
 			Log = LogWithCtr(c)
 			start := time.Now()
 			st := start.Format("2006-01-02 15:04:05")
-			path := c.request.Path()
-			query := c.request.RawQuery()
-			method := c.request.Method()
+			path := c.ctx.Path()
+			method := tools.BytesToString(c.ctx.Method())
 
 			var b []byte
 			if method != "GET" && method != "OPTIONS" && method != "HEAD" {
-				b, _ = c.request.RawDataSetBody()
+				b = c.ctx.PostBody()
 				c.SetKey(BodyBytesKey, b)
 			}
 
@@ -239,11 +214,11 @@ func (b *Blade) EnableLogRequest() {
 				zap.String("time", st),
 				zap.Int("status", c.Status()),
 				zap.String("method", method),
-				zap.String("path", path),
-				zap.String("query", query),
+				zap.ByteString("path", path),
+				zap.ByteString("query", c.ctx.URI().QueryString()),
 				zap.ByteString("body", b),
 				zap.String("ip", c.ClientIP()),
-				zap.String("user-agent", c.request.req.UserAgent()),
+				zap.ByteString("user-agent", c.ctx.Request.Header.UserAgent()),
 				zap.Duration("latency", latency))
 
 			Log = LogReleaseCtr(c)

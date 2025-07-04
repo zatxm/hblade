@@ -3,11 +3,12 @@ package binding
 import (
 	"errors"
 	"mime/multipart"
-	"net/http"
 	"reflect"
+
+	"github.com/valyala/fasthttp"
 )
 
-type multipartRequest http.Request
+type multipartRequest fasthttp.RequestCtx
 
 var _ setter = (*multipartRequest)(nil)
 
@@ -21,11 +22,15 @@ var (
 
 // TrySet tries to set a value by the multipart request with the binding a form file
 func (r *multipartRequest) TrySet(value reflect.Value, field reflect.StructField, key string, opt setOptions) (bool, error) {
-	if files := r.MultipartForm.File[key]; len(files) != 0 {
+	mf, err := r.Request.MultipartForm()
+	if err != nil {
+		return false, err
+	}
+	if files := mf.File[key]; len(files) != 0 {
 		return setByMultipartFormFile(value, field, files)
 	}
 
-	return setByForm(value, field, r.MultipartForm.Value, key, opt)
+	return setByForm(value, field, mf.Value, key, opt)
 }
 
 func setByMultipartFormFile(value reflect.Value, field reflect.StructField, files []*multipart.FileHeader) (isSet bool, err error) {

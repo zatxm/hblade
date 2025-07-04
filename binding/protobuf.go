@@ -2,11 +2,9 @@ package binding
 
 import (
 	"errors"
-	"net/http"
 
+	"github.com/valyala/fasthttp"
 	"google.golang.org/protobuf/proto"
-
-	"github.com/zatxm/hblade/v2/tools"
 )
 
 type protobufBinding struct{}
@@ -15,12 +13,8 @@ func (protobufBinding) Name() string {
 	return "protobuf"
 }
 
-func (b protobufBinding) Bind(req *http.Request, obj any) error {
-	buf, err := tools.ReadAll(req.Body)
-	if err != nil {
-		return err
-	}
-	return b.BindBody(buf, obj)
+func (b protobufBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	return b.BindBody(req.PostBody(), obj)
 }
 
 func (protobufBinding) BindBody(body []byte, obj any) error {

@@ -1,8 +1,10 @@
 package binding
 
 import (
-	"errors"
-	"net/http"
+	"net/url"
+
+	"github.com/valyala/fasthttp"
+	"github.com/zatxm/hblade/v2/tools"
 )
 
 const defaultMemory = 32 << 20
@@ -13,20 +15,30 @@ type (
 	formMultipartBinding struct{}
 )
 
+func convertForm(ctx *fasthttp.RequestCtx) url.Values {
+	form := url.Values{}
+	ctx.QueryArgs().All()(func(key, val []byte) bool {
+		form.Add(tools.BytesToString(key), tools.BytesToString(val))
+		return true
+	})
+	ctx.PostArgs().All()(func(key, val []byte) bool {
+		form.Add(tools.BytesToString(key), tools.BytesToString(val))
+		return true
+	})
+
+	return form
+}
+
 func (formBinding) Name() string {
 	return "form"
 }
 
-func (formBinding) Bind(req *http.Request, obj any) error {
-	if err := req.ParseForm(); err != nil {
+func (formBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	form := convertForm(req)
+	if err := mapForm(obj, form); err != nil {
 		return err
 	}
-	if err := req.ParseMultipartForm(defaultMemory); err != nil && !errors.Is(err, http.ErrNotMultipart) {
-		return err
-	}
-	if err := mapForm(obj, req.Form); err != nil {
-		return err
-	}
+
 	return validate(obj)
 }
 
@@ -34,11 +46,13 @@ func (formPostBinding) Name() string {
 	return "form-urlencoded"
 }
 
-func (formPostBinding) Bind(req *http.Request, obj any) error {
-	if err := req.ParseForm(); err != nil {
-		return err
-	}
-	if err := mapForm(obj, req.PostForm); err != nil {
+func (formPostBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	form := url.Values{}
+	req.PostArgs().All()(func(key, val []byte) bool {
+		form.Add(tools.BytesToString(key), tools.BytesToString(val))
+		return true
+	})
+	if err := mapForm(obj, form); err != nil {
 		return err
 	}
 	return validate(obj)
@@ -48,10 +62,7 @@ func (formMultipartBinding) Name() string {
 	return "multipart/form-data"
 }
 
-func (formMultipartBinding) Bind(req *http.Request, obj any) error {
-	if err := req.ParseMultipartForm(defaultMemory); err != nil {
-		return err
-	}
+func (formMultipartBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
 	if err := mappingByPtr(obj, (*multipartRequest)(req), "form"); err != nil {
 		return err
 	}

@@ -1,9 +1,12 @@
 package binding
 
 import (
-	"net/http"
 	"net/textproto"
+	"net/url"
 	"reflect"
+
+	"github.com/valyala/fasthttp"
+	"github.com/zatxm/hblade/v2/tools"
 )
 
 type headerBinding struct{}
@@ -12,8 +15,13 @@ func (headerBinding) Name() string {
 	return "header"
 }
 
-func (headerBinding) Bind(req *http.Request, obj any) error {
-	if err := mapHeader(obj, req.Header); err != nil {
+func (headerBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	form := url.Values{}
+	req.Request.Header.All()(func(key, val []byte) bool {
+		form.Add(tools.BytesToString(key), tools.BytesToString(val))
+		return true
+	})
+	if err := mapHeader(obj, form); err != nil {
 		return err
 	}
 

@@ -1,10 +1,9 @@
 package binding
 
 import (
-	"bytes"
 	"encoding/xml"
-	"io"
-	"net/http"
+
+	"github.com/valyala/fasthttp"
 )
 
 type xmlBinding struct{}
@@ -13,17 +12,16 @@ func (xmlBinding) Name() string {
 	return "xml"
 }
 
-func (xmlBinding) Bind(req *http.Request, obj any) error {
-	return decodeXML(req.Body, obj)
+func (xmlBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	return decodeXML(req.PostBody(), obj)
 }
 
 func (xmlBinding) BindBody(body []byte, obj any) error {
-	return decodeXML(bytes.NewReader(body), obj)
+	return decodeXML(body, obj)
 }
 
-func decodeXML(r io.Reader, obj any) error {
-	decoder := xml.NewDecoder(r)
-	if err := decoder.Decode(obj); err != nil {
+func decodeXML(b []byte, obj any) error {
+	if err := xml.Unmarshal(b, obj); err != nil {
 		return err
 	}
 	return validate(obj)

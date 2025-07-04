@@ -2,9 +2,9 @@ package binding
 
 import (
 	"fmt"
-	"net/http"
 	"reflect"
 
+	"github.com/valyala/fasthttp"
 	"github.com/zatxm/hblade/v2/tools"
 )
 
@@ -14,13 +14,8 @@ func (plainBinding) Name() string {
 	return "plain"
 }
 
-func (plainBinding) Bind(req *http.Request, obj any) error {
-	all, err := tools.ReadAll(req.Body)
-	if err != nil {
-		return err
-	}
-
-	return decodePlain(all, obj)
+func (plainBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	return decodePlain(req.PostBody(), obj)
 }
 
 func (plainBinding) BindBody(body []byte, obj any) error {

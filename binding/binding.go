@@ -1,6 +1,10 @@
 package binding
 
-import "net/http"
+import (
+	"net/http"
+
+	"github.com/valyala/fasthttp"
+)
 
 // Content-Type MIME of the most common data formats.
 const (
@@ -24,7 +28,7 @@ const (
 // the form POST.
 type Binding interface {
 	Name() string
-	Bind(*http.Request, any) error
+	Bind(*fasthttp.RequestCtx, any) error
 }
 
 // BindingBody adds BindBody method to Binding. BindBody is similar with Bind,

@@ -3,9 +3,9 @@ package binding
 import (
 	"bytes"
 	"io"
-	"net/http"
 
 	"github.com/ugorji/go/codec"
+	"github.com/valyala/fasthttp"
 )
 
 type msgpackBinding struct{}
@@ -14,8 +14,8 @@ func (msgpackBinding) Name() string {
 	return "msgpack"
 }
 
-func (msgpackBinding) Bind(req *http.Request, obj any) error {
-	return decodeMsgPack(req.Body, obj)
+func (msgpackBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	return decodeMsgPack(bytes.NewReader(req.PostBody()), obj)
 }
 
 func (msgpackBinding) BindBody(body []byte, obj any) error {

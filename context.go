@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/valyala/fasthttp"
 	"github.com/zatxm/hblade/v2/binding"
 	"github.com/zatxm/hblade/v2/tools"
 )
@@ -32,13 +33,12 @@ const (
 type Context struct {
 	b           *Blade
 	status      int
-	request     request
-	response    response
+	ctx         *fasthttp.RequestCtx
 	handler     Handler
 	paramNames  [maxParams]string
 	paramValues [maxParams]string
 	paramCount  int
-	sameSite    http.SameSite
+	sameSite    fasthttp.CookieSameSite
 	mu          sync.RWMutex
 	keys        map[string]any
 }
@@ -158,21 +158,16 @@ func (c *Context) GetKeyBodyJsonAny(key string) (sm any) {
 
 // 返回字节处理
 func (c *Context) Bytes(body []byte) error {
-	// If the request has been canceled by the client, stop.
-	if c.request.Context().Err() != nil {
-		return errors.New("Request interrupted by the client")
-	}
-
 	// Small response
 	if len(body) < gzipThreshold {
-		c.response.rw.WriteHeader(c.status)
-		_, err := c.response.rw.Write(body)
+		c.ctx.SetStatusCode(c.status)
+		_, err := c.ctx.Write(body)
 		return err
 	}
 
 	// Content type
-	header := c.response.rw.Header()
-	contentType := header.Get(contentTypeHeader)
+	header := &c.ctx.Response.Header
+	contentType := tools.BytesToString(header.ContentType())
 	isMediaType := isMedia(contentType)
 
 	// Cache control header
@@ -183,21 +178,20 @@ func (c *Context) Bytes(body []byte) error {
 	}
 
 	// No GZip?
-	clientSupportsGZip := strings.Contains(c.request.Header(acceptEncodingHeader), "gzip")
-
+	clientSupportsGZip := c.ctx.Request.Header.HasAcceptEncoding("gzip")
 	if !clientSupportsGZip || !canCompress(contentType) {
 		header.Set(contentLengthHeader, strconv.Itoa(len(body)))
-		c.response.rw.WriteHeader(c.status)
-		_, err := c.response.rw.Write(body)
+		c.ctx.SetStatusCode(c.status)
+		_, err := c.ctx.Write(body)
 		return err
 	}
 
 	// GZip
 	header.Set(contentEncodingHeader, contentEncodingGzip)
-	c.response.rw.WriteHeader(c.status)
+	c.ctx.SetStatusCode(c.status)
 
 	// Write response body
-	writer, _ := gzip.NewWriterLevel(c.response.rw, gzip.BestCompression)
+	writer, _ := gzip.NewWriterLevel(c.ctx.Response.BodyWriter(), gzip.BestCompression)
 	_, err := writer.Write(body)
 	writer.Close()
 
@@ -214,9 +208,8 @@ func (c *Context) addParameter(name string, value string) {
 
 // JSON encodes the object to a JSON string and responds.
 func (c *Context) JSON(value any) error {
-	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
+	c.ctx.Response.Header.Set(contentTypeHeader, contentTypeJSON)
 	bytes, err := Json.Marshal(value)
-
 	if err != nil {
 		return err
 	}
@@ -226,7 +219,7 @@ func (c *Context) JSON(value any) error {
 
 func (c *Context) JSONAndStatus(status int, value any) error {
 	c.status = status
-	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
+	c.ctx.Response.Header.Set(contentTypeHeader, contentTypeJSON)
 	bytes, err := Json.Marshal(value)
 	if err != nil {
 		return err
@@ -237,7 +230,7 @@ func (c *Context) JSONAndStatus(status int, value any) error {
 
 // HTML sends a HTML string.
 func (c *Context) HTML(html string) error {
-	header := c.response.rw.Header()
+	header := &c.ctx.Response.Header
 	header.Set(contentTypeHeader, contentTypeHTML)
 	header.Set(contentTypeOptionsHeader, contentTypeOptions)
 	header.Set(xssProtectionHeader, xssProtection)
@@ -254,13 +247,13 @@ func (c *Context) Close() {
 
 // CSS sends a style sheet.
 func (c *Context) CSS(text string) error {
-	c.response.SetHeader(contentTypeHeader, contentTypeCSS)
+	c.ctx.Response.Header.Set(contentTypeHeader, contentTypeCSS)
 	return c.String(text)
 }
 
 // JavaScript sends a script.
 func (c *Context) JavaScript(code string) error {
-	c.response.SetHeader(contentTypeHeader, contentTypeJavaScript)
+	c.ctx.Response.Header.Set(contentTypeHeader, contentTypeJavaScript)
 	return c.String(code)
 }
 
@@ -271,10 +264,10 @@ func (c *Context) File(file string) error {
 
 	// Cache control header
 	if isMedia(contentType) {
-		c.response.SetHeader(cacheControlHeader, cacheControlMedia)
+		c.ctx.Response.Header.Set(cacheControlHeader, cacheControlMedia)
 	}
 
-	http.ServeFile(c.response.rw, c.request.req, file)
+	fasthttp.ServeFile(c.ctx, file)
 	return nil
 }
 
@@ -314,12 +307,12 @@ func (c *Context) Error(statusCode int, errorList ...any) error {
 
 // 获取相对请求路径,如/ws/gutu
 func (c *Context) Path() string {
-	return c.request.req.URL.Path
+	return tools.BytesToString(c.ctx.Path())
 }
 
 // 设置相对请求路径,如/ws/gutu
 func (c *Context) SetPath(path string) {
-	c.request.req.URL.Path = path
+	c.ctx.URI().SetPath(path)
 }
 
 // Get retrieves an URL parameter.
@@ -340,7 +333,7 @@ func (c *Context) GetInt(param string) (int, error) {
 
 // Get IP by RemoteAddr
 func (c *Context) IP() string {
-	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.req.RemoteAddr)); err == nil {
+	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.ctx.RemoteAddr().String())); err == nil {
 		return ip
 	}
 	return ""
@@ -348,36 +341,36 @@ func (c *Context) IP() string {
 
 // ClientIP tries to determine the real IP address of the client.
 func (c *Context) ClientIP() string {
-	ip := c.request.Header(forwardedForHeader)
-	ip = strings.TrimSpace(strings.Split(ip, ",")[0])
-	if ip == "" {
-		ip = strings.TrimSpace(c.request.Header(realIPHeader))
-	}
-	if ip != "" {
-		return ip
+	header := &c.ctx.Request.Header
+
+	if addr := header.Peek(forwardedForHeader); len(addr) > 0 {
+		ip := strings.TrimSpace(strings.Split(tools.BytesToString(addr), ",")[0])
+		if ip != "" {
+			return ip
+		}
 	}
 
-	if addr := c.request.Header(appengineRemoteAddr); addr != "" {
-		return addr
+	if addr := header.Peek(realIPHeader); len(addr) > 0 {
+		return strings.TrimSpace(tools.BytesToString(addr))
 	}
 
-	if ip, _, err := net.SplitHostPort(strings.TrimSpace(c.request.req.RemoteAddr)); err == nil {
-		return ip
+	if addr := header.Peek(appengineRemoteAddr); len(addr) > 0 {
+		return strings.TrimSpace(tools.BytesToString(addr))
 	}
 
-	return ""
+	return c.IP()
 }
 
 // 从URL获取参数值
 func (c *Context) Query(param string) string {
-	return c.request.req.URL.Query().Get(param)
+	return tools.BytesToString(c.ctx.URI().QueryArgs().Peek(param))
 }
 
 // Redirect redirects to the given URL.
 func (c *Context) Redirect(status int, u string) error {
 	c.status = status
-	c.response.SetHeader("Location", u)
-	c.response.rw.WriteHeader(c.status)
+	c.ctx.Response.Header.Set("Location", u)
+	c.ctx.SetStatusCode(c.status)
 	return nil
 }
 
@@ -424,14 +417,18 @@ func (c *Context) ReadAll(reader io.Reader) error {
 // 发送io.Reader内容,不会压缩
 // 如阅读器包含大量数据时用此功能
 func (c *Context) Reader(reader io.Reader) error {
-	_, err := io.Copy(c.response.rw, reader)
+	_, err := io.Copy(c.ctx.Response.BodyWriter(), reader)
 	return err
 }
 
 // 发送io.ReadSeeker内容,不会压缩
 // 如阅读器包含大量数据时用此功能
 func (c *Context) ReadSeeker(reader io.ReadSeeker) error {
-	http.ServeContent(c.response.rw, c.request.req, "", time.Time{}, reader)
+	var buf bytes.Buffer
+	io.Copy(&buf, reader)
+	c.ctx.SetContentType(http.DetectContentType(buf.Bytes()))
+	c.ctx.Response.Header.SetLastModified(time.Time{})
+	c.ctx.Write(buf.Bytes())
 	return nil
 }
 
@@ -452,23 +449,18 @@ func (c *Context) String(body string) error {
 }
 
 // Request returns the HTTP request.
-func (c *Context) Request() Request {
-	return &c.request
-}
-
-// Response returns the HTTP response.
-func (c *Context) Response() Response {
-	return &c.response
+func (c *Context) Ctx() *fasthttp.RequestCtx {
+	return c.ctx
 }
 
 // Text sends a plain text string.
 func (c *Context) Text(text string) error {
-	c.response.SetHeader(contentTypeHeader, contentTypePlainText)
+	c.ctx.Response.Header.Set(contentTypeHeader, contentTypePlainText)
 	return c.String(text)
 }
 
 func (c *Context) ShouldBind(obj any) error {
-	b := binding.Default(c.request.Method(), c.request.ContentType())
+	b := binding.Default(tools.BytesToString(c.ctx.Method()), tools.BytesToString(c.ctx.Request.Header.ContentType()))
 	return c.ShouldBindWith(obj, b)
 }
 
@@ -480,22 +472,13 @@ func (c *Context) ShouldBindJSON(obj any) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj any, b binding.Binding) error {
-	method := c.request.Method()
-	isBodyRequest := false
+	method := tools.BytesToString(c.ctx.Method())
 	if method != "GET" && method != "OPTIONS" && method != "HEAD" {
-		isBodyRequest = true
 		if _, ok := c.GetKey(BodyBytesKey); !ok {
-			body, err := c.request.RawDataSetBody()
-			if err != nil {
-				return err
-			}
-			c.SetKey(BodyBytesKey, body)
+			c.SetKey(BodyBytesKey, c.ctx.PostBody())
 		}
 	}
-	err := b.Bind(c.request.req, obj)
-	if isBodyRequest {
-		c.request.req.Body = io.NopCloser(bytes.NewBuffer(c.GetKeyByte(BodyBytesKey)))
-	}
+	err := b.Bind(c.ctx, obj)
 	return err
 }
 
@@ -515,7 +498,7 @@ func (c *Context) ShouldBindQuery(obj any) error {
 // It decodes the json payload into the struct specified as a pointer.
 // It writes a 400 error and sets Content-Type header "text/plain" in the response if input is not valid.
 func (c *Context) Bind(obj any) error {
-	b := binding.Default(c.Request().Method(), c.Request().Header(contentTypeHeader))
+	b := binding.Default(tools.BytesToString(c.ctx.Method()), tools.BytesToString(c.ctx.Request.Header.ContentType()))
 	return c.MustBindWith(obj, b)
 }
 
@@ -531,16 +514,15 @@ func (c *Context) MustBindWith(obj any, b binding.Binding) error {
 
 // Get name cookie value
 func (c *Context) Cookie(name string) (string, error) {
-	cookie, err := c.request.req.Cookie(name)
-	if err != nil {
-		return "", err
+	cookie := c.ctx.Request.Header.Cookie(name)
+	if len(cookie) == 0 {
+		return "", nil
 	}
-	v, _ := url.QueryUnescape(cookie.Value)
-	return v, nil
+	return url.QueryUnescape(tools.BytesToString(cookie))
 }
 
 // SetSameSite with cookie
-func (c *Context) SetSameSite(samesite http.SameSite) {
+func (c *Context) SetSameSite(samesite fasthttp.CookieSameSite) {
 	c.sameSite = samesite
 }
 
@@ -549,14 +531,14 @@ func (c *Context) SetCookie(name, value string, maxAge int, path, domain string,
 	if path == "" {
 		path = "/"
 	}
-	http.SetCookie(c.response.rw, &http.Cookie{
-		Name:     name,
-		Value:    url.QueryEscape(value),
-		MaxAge:   maxAge,
-		Path:     path,
-		Domain:   domain,
-		SameSite: c.sameSite,
-		Secure:   secure,
-		HttpOnly: httpOnly,
-	})
+	var cookie fasthttp.Cookie
+	cookie.SetKey(name)
+	cookie.SetValue(url.QueryEscape(value))
+	cookie.SetMaxAge(maxAge)
+	cookie.SetPath(path)
+	cookie.SetDomain(domain)
+	cookie.SetSecure(secure)
+	cookie.SetHTTPOnly(httpOnly)
+	cookie.SetSameSite(c.sameSite)
+	c.ctx.Response.Header.SetCookie(&cookie)
 }

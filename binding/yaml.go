@@ -1,11 +1,8 @@
 package binding
 
 import (
-	"bytes"
-	"io"
-	"net/http"
-
 	"github.com/goccy/go-yaml"
+	"github.com/valyala/fasthttp"
 )
 
 type yamlBinding struct{}
@@ -14,17 +11,16 @@ func (yamlBinding) Name() string {
 	return "yaml"
 }
 
-func (yamlBinding) Bind(req *http.Request, obj any) error {
-	return decodeYAML(req.Body, obj)
+func (yamlBinding) Bind(req *fasthttp.RequestCtx, obj any) error {
+	return decodeYAML(req.PostBody(), obj)
 }
 
 func (yamlBinding) BindBody(body []byte, obj any) error {
-	return decodeYAML(bytes.NewReader(body), obj)
+	return decodeYAML(body, obj)
 }
 
-func decodeYAML(r io.Reader, obj any) error {
-	decoder := yaml.NewDecoder(r)
-	if err := decoder.Decode(obj); err != nil {
+func decodeYAML(b []byte, obj any) error {
+	if err := yaml.Unmarshal(b, obj); err != nil {
 		return err
 	}
 	return validate(obj)
