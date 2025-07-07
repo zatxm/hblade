@@ -17,11 +17,12 @@ import (
 var Json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 type Blade struct {
-	router       *Router[Handler]
-	middleware   []Middleware
-	contextPool  sync.Pool
-	notFoundFn   func(*Context) //404
-	errorHandler func(*Context, error)
+	router                    *Router[Handler]
+	middleware                []Middleware
+	contextPool               sync.Pool
+	fasthttpKeepHijackedConns bool           //Used in websocket, autonomously control conn closing
+	notFoundFn                func(*Context) //404
+	errorHandler              func(*Context, error)
 }
 
 // New creates a new blade.
@@ -44,6 +45,10 @@ func New() *Blade {
 
 func (b *Blade) NotFoundFn(f func(*Context)) {
 	b.notFoundFn = f
+}
+
+func (b *Blade) KeepHijackedConns(keep bool) {
+	b.fasthttpKeepHijackedConns = keep
 }
 
 // Get registers your function to be called when the given GET path has been requested.
@@ -138,11 +143,15 @@ func (b *Blade) handle() func(*fasthttp.RequestCtx) {
 }
 
 // Run starts your application with http.
-func (b *Blade) Run(address string) error {
-	Log.Debug("Listening and serving HTTP", zap.String("address", address))
+func (b *Blade) Run(addr string) error {
+	Log.Debug("Listening and serving HTTP", zap.String("address", addr))
 
-	if err := fasthttp.ListenAndServe(address, b.handle()); err != nil {
-		return errors.Wrapf(err, "addrs: %v", address)
+	s := &fasthttp.Server{
+		Handler:           b.handle(),
+		KeepHijackedConns: b.fasthttpKeepHijackedConns,
+	}
+	if err := s.ListenAndServe(addr); err != nil {
+		return errors.Wrapf(err, "addrs: %v", addr)
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -155,9 +164,12 @@ func (b *Blade) Run(address string) error {
 func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
 	Log.Debug("Listening and serving HTTPS", zap.String("address", addr))
 
-	if err := fasthttp.ListenAndServeTLS(addr, certFile, keyFile, b.handle()); err != nil {
+	s := &fasthttp.Server{
+		Handler:           b.handle(),
+		KeepHijackedConns: b.fasthttpKeepHijackedConns,
+	}
+	if err := s.ListenAndServeTLS(addr, certFile, keyFile); err != nil {
 		return errors.Wrapf(err, "tls: %s/%s:%s", addr, certFile, keyFile)
-
 	}
 
 	stop := make(chan os.Signal, 1)
