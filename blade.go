@@ -149,6 +149,7 @@ func (b *Blade) Run(addr string) error {
 	s := &fasthttp.Server{
 		Handler:           b.handle(),
 		KeepHijackedConns: b.fasthttpKeepHijackedConns,
+		Logger:            newFastLog(),
 	}
 	if err := s.ListenAndServe(addr); err != nil {
 		return errors.Wrapf(err, "addrs: %v", addr)
@@ -167,6 +168,7 @@ func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
 	s := &fasthttp.Server{
 		Handler:           b.handle(),
 		KeepHijackedConns: b.fasthttpKeepHijackedConns,
+		Logger:            newFastLog(),
 	}
 	if err := s.ListenAndServeTLS(addr, certFile, keyFile); err != nil {
 		return errors.Wrapf(err, "tls: %s/%s:%s", addr, certFile, keyFile)

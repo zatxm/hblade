@@ -2,6 +2,7 @@ package hblade
 
 import (
 	"github.com/google/uuid"
+	"github.com/valyala/fasthttp"
 	"go.uber.org/zap"
 )
 
@@ -31,4 +32,14 @@ func LogReleaseCtr(c *Context) *zap.Logger {
 		return l.(*zap.Logger)
 	}
 	return Log
+}
+
+type fastLog struct{}
+
+func (l *fastLog) Printf(format string, args ...any) {
+	Log.Info(format, zap.Any("Args", args))
+}
+
+func newFastLog() fasthttp.Logger {
+	return &fastLog{}
 }
