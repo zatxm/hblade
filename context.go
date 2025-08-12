@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/zatxm/hblade/v2/binding"
 	"github.com/zatxm/hblade/v2/tools"
 )
@@ -149,9 +150,8 @@ func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
 func (c *Context) GetKeyBodyJsonAny(key string) (sm any) {
 	if val, ok := c.GetKey(key); ok && val != nil {
 		if v, ok := val.([]byte); ok {
-			Json.Unmarshal(v, &sm)
+			json.Unmarshal(v, &sm)
 		}
-
 	}
 	return
 }
@@ -215,7 +215,7 @@ func (c *Context) addParameter(name string, value string) {
 // JSON encodes the object to a JSON string and responds.
 func (c *Context) JSON(value any) error {
 	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
-	bytes, err := Json.Marshal(value)
+	bytes, err := json.Marshal(value)
 
 	if err != nil {
 		return err
@@ -227,7 +227,7 @@ func (c *Context) JSON(value any) error {
 func (c *Context) JSONAndStatus(status int, value any) error {
 	c.status = status
 	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
-	bytes, err := Json.Marshal(value)
+	bytes, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}

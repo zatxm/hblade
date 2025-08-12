@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/zatxm/hblade/v2/tools"
 )
 
@@ -328,9 +329,9 @@ func setWithProperType(val string, value reflect.Value, field reflect.StructFiel
 		case multipart.FileHeader:
 			return nil
 		}
-		return Json.Unmarshal(tools.StringToBytes(val), value.Addr().Interface())
+		return json.Unmarshal(tools.StringToBytes(val), value.Addr().Interface())
 	case reflect.Map:
-		return Json.Unmarshal(tools.StringToBytes(val), value.Addr().Interface())
+		return json.Unmarshal(tools.StringToBytes(val), value.Addr().Interface())
 	case reflect.Ptr:
 		if !value.Elem().IsValid() {
 			value.Set(reflect.New(value.Type().Elem()))

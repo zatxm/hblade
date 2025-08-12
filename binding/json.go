@@ -6,10 +6,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/json-iterator/go"
+	"github.com/goccy/go-json"
 )
-
-var Json = jsoniter.ConfigCompatibleWithStandardLibrary
 
 // EnableDecoderUseNumber is used to call the UseNumber method on the JSON
 // Decoder instance. UseNumber causes the Decoder to unmarshal a number into an
@@ -40,7 +38,7 @@ func (jsonBinding) BindBody(body []byte, obj any) error {
 }
 
 func decodeJSON(r io.Reader, obj any) error {
-	decoder := Json.NewDecoder(r)
+	decoder := json.NewDecoder(r)
 	if EnableDecoderUseNumber {
 		decoder.UseNumber()
 	}
