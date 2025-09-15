@@ -188,7 +188,7 @@ notFound:
 // Bind all handlers to a new one provided by the callback.
 func (tree *Tree[T]) Bind(transform func(T) T) {
 	tree.root.each(func(node *treeNode[T]) {
-		if !node.checked {
+		if !node.isNil() && !node.checked {
 			node.data = transform(node.data)
 			node.checked = true
 		}

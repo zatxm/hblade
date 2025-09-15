@@ -1,6 +1,9 @@
 package hblade
 
-import "strings"
+import (
+	"reflect"
+	"strings"
+)
 
 // node types
 const (
@@ -280,5 +283,28 @@ func (node *treeNode[T]) each(callback func(*treeNode[T])) {
 
 	if node.wildcard != nil {
 		node.wildcard.each(callback)
+	}
+}
+
+func (n *treeNode[T]) isNil() bool {
+	if n == nil {
+		return true
+	}
+
+	v := reflect.ValueOf(n.data)
+
+	// 检查是否是零值
+	if !v.IsValid() {
+		return true
+	}
+
+	// 检查可能为 nil 的类型
+	switch v.Kind() {
+	case reflect.Ptr, reflect.Map, reflect.Slice,
+		reflect.Chan, reflect.Func, reflect.Interface:
+		return v.IsNil()
+	default:
+		// 对于值类型，检查是否为零值
+		return v.IsZero()
 	}
 }
