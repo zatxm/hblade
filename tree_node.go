@@ -266,7 +266,14 @@ func (node *treeNode[T]) end(path string, data T, i int, offset int) (*treeNode[
 
 // each traverses the tree and calls the given function on every node.
 func (node *treeNode[T]) each(callback func(*treeNode[T])) {
-	callback(node)
+	if node.isNil() {
+		return
+	}
+
+	if !node.checked {
+		node.checked = true
+		callback(node)
+	}
 
 	for i := range node.children {
 		child := node.children[i]
