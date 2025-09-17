@@ -45,44 +45,44 @@ func (b *Blade) NotFoundFn(f func(*Context)) {
 
 // Get registers your function to be called when the given GET path has been requested.
 func (b *Blade) Get(path string, handler Handler) {
-	b.router.Add(http.MethodGet, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodGet, path, transform(handler))
 }
 
 // Post registers your function to be called when the given POST path has been requested.
 func (b *Blade) Post(path string, handler Handler) {
-	b.router.Add(http.MethodPost, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodPost, path, transform(handler))
 }
 
 // Delete registers your function to be called when the given DELETE path has been requested.
 func (b *Blade) Delete(path string, handler Handler) {
-	b.router.Add(http.MethodDelete, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodDelete, path, transform(handler))
 }
 
 // Put registers your function to be called when the given PUT path has been requested.
 func (b *Blade) Put(path string, handler Handler) {
-	b.router.Add(http.MethodPut, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodPut, path, transform(handler))
 }
 
 // Patch registers your function to be called when the given PATCH path has been requested.
 func (b *Blade) Patch(path string, handler Handler) {
-	b.router.Add(http.MethodPatch, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodPatch, path, transform(handler))
 }
 
 // Options registers your function to be called when the given OPTIONS path has been requested.
 func (b *Blade) Options(path string, handler Handler) {
-	b.router.Add(http.MethodOptions, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodOptions, path, transform(handler))
 }
 
 // Head registers your function to be called when the given HEAD path has been requested.
 func (b *Blade) Head(path string, handler Handler) {
-	b.router.Add(http.MethodHead, path, handler)
-	b.BindMiddleware()
+	transform := b.transformMiddleware()
+	b.router.Add(http.MethodHead, path, transform(handler))
 }
 
 // Can bind static directory
@@ -104,7 +104,6 @@ func (b *Blade) Any(path string, handler Handler) {
 	b.router.Add(http.MethodPatch, path, handler)
 	b.router.Add(http.MethodOptions, path, handler)
 	b.router.Add(http.MethodHead, path, handler)
-	b.BindMiddleware()
 }
 
 // Router returns the router used by the blade.
@@ -199,6 +198,13 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 		b.errorHandler(c, err)
 	}
 	c.Close()
+}
+
+// Transform middleware
+func (b *Blade) transformMiddleware() func(Handler) Handler {
+	return func(handler Handler) Handler {
+		return handler.Bind(b.middleware...)
+	}
 }
 
 // Binding middleware
