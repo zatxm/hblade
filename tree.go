@@ -184,12 +184,3 @@ notFound:
 	var empty T
 	return empty
 }
-
-// Bind all handlers to a new one provided by the callback.
-func (tree *Tree[T]) Bind(transform func(T) T) {
-	if tree.root.prefix != "" {
-		tree.root.each(func(node *treeNode[T]) {
-			node.data = transform(node.data)
-		})
-	}
-}

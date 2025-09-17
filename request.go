@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/zatxm/hblade/v2/tools"
+	"github.com/zatxm/hblade/v3/tools"
 )
 
 type Request interface {

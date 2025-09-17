@@ -30,19 +30,6 @@ func (router *Router[T]) Lookup(method string, path string, addParameter func(st
 	return tree.Lookup(path, addParameter)
 }
 
-// Map traverses all trees and calls the given function on every node.
-func (router *Router[T]) Bind(transform func(T) T) {
-	router.get.Bind(transform)
-	router.post.Bind(transform)
-	router.delete.Bind(transform)
-	router.put.Bind(transform)
-	router.patch.Bind(transform)
-	router.head.Bind(transform)
-	router.connect.Bind(transform)
-	router.trace.Bind(transform)
-	router.options.Bind(transform)
-}
-
 // selectTree returns the tree by the given HTTP method.
 func (router *Router[T]) selectTree(method string) *Tree[T] {
 	switch method {

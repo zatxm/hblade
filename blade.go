@@ -1,10 +1,12 @@
 package hblade
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -15,7 +17,7 @@ import (
 
 type Blade struct {
 	router       *Router[Handler]
-	middleware   []Middleware
+	middleware   []Middleware //Global middleware
 	contextPool  sync.Pool
 	notFoundFn   func(*Context) //404
 	errorHandler func(*Context, error)
@@ -43,67 +45,46 @@ func (b *Blade) NotFoundFn(f func(*Context)) {
 	b.notFoundFn = f
 }
 
+// Add registers a new handler for the given method and path.
+func (b *Blade) Add(method, path string, handler Handler, m ...Middleware) {
+	path = "/" + strings.Trim(path, "/")
+	transform := b.transformMiddleware(m...)
+	b.router.Add(method, path, transform(handler))
+}
+
 // Get registers your function to be called when the given GET path has been requested.
-func (b *Blade) Get(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodGet, path, transform(handler))
+func (b *Blade) Get(path string, handler Handler, m ...Middleware) {
+	b.Add(http.MethodGet, path, handler, m...)
 }
 
 // Post registers your function to be called when the given POST path has been requested.
-func (b *Blade) Post(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodPost, path, transform(handler))
-}
-
-// Delete registers your function to be called when the given DELETE path has been requested.
-func (b *Blade) Delete(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodDelete, path, transform(handler))
+func (b *Blade) Post(path string, handler Handler, m ...Middleware) {
+	b.Add(http.MethodPost, path, handler, m...)
 }
 
 // Put registers your function to be called when the given PUT path has been requested.
-func (b *Blade) Put(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodPut, path, transform(handler))
+func (b *Blade) Put(path string, handler Handler, m ...Middleware) {
+	b.Add(http.MethodPut, path, handler, m...)
 }
 
 // Patch registers your function to be called when the given PATCH path has been requested.
-func (b *Blade) Patch(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodPatch, path, transform(handler))
+func (b *Blade) Patch(path string, handler Handler, m ...Middleware) {
+	b.Add(http.MethodPatch, path, handler, m...)
 }
 
-// Options registers your function to be called when the given OPTIONS path has been requested.
-func (b *Blade) Options(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodOptions, path, transform(handler))
+// Delete registers your function to be called when the given DELETE path has been requested.
+func (b *Blade) Delete(path string, handler Handler, m ...Middleware) {
+	b.Add(http.MethodDelete, path, handler, m...)
 }
 
-// Head registers your function to be called when the given HEAD path has been requested.
-func (b *Blade) Head(path string, handler Handler) {
-	transform := b.transformMiddleware()
-	b.router.Add(http.MethodHead, path, transform(handler))
-}
-
-// Can bind static directory
+// Bind static directory
 // h.Static("/static", "static/")
-func (b *Blade) Static(path, bind string) {
-	relativePath := path + "/*file"
+func (b *Blade) Static(path, bind string, m ...Middleware) {
+	relativePath := "/" + strings.Trim(path, "/") + "/*file"
 	handler := func(c *Context) error {
 		return c.File(bind + c.Get("file"))
 	}
-	b.Get(relativePath, handler)
-}
-
-// Any registers your function to be called with any http method.
-func (b *Blade) Any(path string, handler Handler) {
-	b.router.Add(http.MethodGet, path, handler)
-	b.router.Add(http.MethodPost, path, handler)
-	b.router.Add(http.MethodDelete, path, handler)
-	b.router.Add(http.MethodPut, path, handler)
-	b.router.Add(http.MethodPatch, path, handler)
-	b.router.Add(http.MethodOptions, path, handler)
-	b.router.Add(http.MethodHead, path, handler)
+	b.Get(relativePath, handler, m...)
 }
 
 // Router returns the router used by the blade.
@@ -111,77 +92,16 @@ func (b *Blade) Router() *Router[Handler] {
 	return b.router
 }
 
-// Run starts your application with http.
-func (b *Blade) Run(address string) error {
-	Log.Debug("Listening and serving HTTP",
-		zap.String("address", address))
-	server := &http.Server{
-		Addr:    address,
-		Handler: b,
-	}
-	if err := server.ListenAndServe(); err != nil {
-		return errors.Wrapf(err, "addrs: %v", address)
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	return nil
-}
-
-// Run starts your application with https.
-func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
-	Log.Debug("Listening and serving HTTPS",
-		zap.String("address", addr))
-	server := &http.Server{
-		Addr:    addr,
-		Handler: b,
-	}
-	if err := server.ListenAndServeTLS(certFile, keyFile); err != nil {
-		return errors.Wrapf(err, "tls: %s/%s:%s", addr, certFile, keyFile)
-
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	return nil
-}
-
-// Run starts your application by given server and listener.
-func (b *Blade) RunServer(server *http.Server, l net.Listener) error {
-	Log.Debug("Listening and serving HTTP on listener what's bind with address@",
-		zap.String("address", l.Addr().String()))
-	server.Handler = b
-	if err := server.Serve(l); err != nil {
-		return errors.Wrapf(err, "listen server: %+v/%+v", server, l)
-	}
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-	<-stop
-	return nil
-}
-
-// Use adds middleware to your middleware chain.
-func (b *Blade) Use(middlewares ...Middleware) {
-	b.middleware = append(b.middleware, middlewares...)
-}
-
-// newContext returns a new context from the pool.
-func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context {
-	c := b.contextPool.Get().(*Context)
-	c.status = http.StatusOK
-	c.request.req = req
-	c.response.rw = res
-	c.paramCount = 0
-	return c
+// Router group
+func (b *Blade) Group(name string, m ...Middleware) *Group {
+	name = strings.Trim(name, "/")
+	g := &Group{app: b, name: name, middleware: m}
+	return g
 }
 
 // ServeHTTP responds to the given request.
 func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	c := b.newContext(request, response)
-
 	c.handler = b.router.Lookup(request.Method, request.URL.Path, c.addParameter)
 	if c.handler == nil {
 		if b.notFoundFn != nil {
@@ -200,18 +120,121 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	c.Close()
 }
 
-// Transform middleware
-func (b *Blade) transformMiddleware() func(Handler) Handler {
-	return func(handler Handler) Handler {
-		return handler.Bind(b.middleware...)
+// Run starts your application with http.
+func (b *Blade) Run(addr string) error {
+	Log.Debug("Listening and serving HTTP", zap.String("address", addr))
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	srv := &http.Server{Addr: addr, Handler: b}
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			Log.Error("http listen error", zap.Error(err))
+			errCh <- err
+		}
+	}()
+
+	select {
+	case sig := <-stop:
+		Log.Info("Shutting down http server...", zap.String("signal", sig.String()))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			return errors.Wrap(err, "http server forced to shutdown")
+		}
+		Log.Info("Http server exited properly")
+		return nil
+	case err := <-errCh:
+		return errors.Wrapf(err, "http server error, addr: %v", addr)
 	}
 }
 
-// Binding middleware
-func (b *Blade) BindMiddleware() {
-	b.router.Bind(func(handler Handler) Handler {
-		return handler.Bind(b.middleware...)
-	})
+// Run starts your application with https.
+func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
+	Log.Debug("Listening and serving HTTPS", zap.String("address", addr))
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	srv := &http.Server{Addr: addr, Handler: b}
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
+			Log.Error("https listen error", zap.Error(err))
+			errCh <- err
+		}
+	}()
+
+	select {
+	case sig := <-stop:
+		Log.Info("Shutting down https server...", zap.String("signal", sig.String()))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			return errors.Wrap(err, "https server forced to shutdown")
+		}
+		Log.Info("Https server exited properly")
+		return nil
+	case err := <-errCh:
+		return errors.Wrapf(err, "https server error, tls: %s/%s:%s", addr, certFile, keyFile)
+	}
+}
+
+// Run starts your application by given server and listener.
+func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
+	Log.Debug("Listening and serving HTTP on listener what's bind with address@",
+		zap.String("address", l.Addr().String()))
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	srv.Handler = b
+	errCh := make(chan error, 1)
+	go func() {
+		if err := srv.Serve(l); err != nil && err != http.ErrServerClosed {
+			Log.Error("listen server error", zap.Error(err))
+			errCh <- err
+		}
+	}()
+
+	select {
+	case sig := <-stop:
+		Log.Info("Shutting down server...", zap.String("signal", sig.String()))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(ctx); err != nil {
+			return errors.Wrap(err, "https server forced to shutdown")
+		}
+		Log.Info("Server exited properly")
+		return nil
+	case err := <-errCh:
+		return errors.Wrapf(err, "listen server: %+v/%+v", srv, l)
+	}
+}
+
+// Use adds middleware to your middleware chain.
+func (b *Blade) Use(m ...Middleware) {
+	b.middleware = append(b.middleware, m...)
+}
+
+// newContext returns a new context from the pool.
+func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context {
+	c := b.contextPool.Get().(*Context)
+	c.status = http.StatusOK
+	c.request.req = req
+	c.response.rw = res
+	c.paramCount = 0
+	return c
+}
+
+// Transform middleware
+func (b *Blade) transformMiddleware(m ...Middleware) func(Handler) Handler {
+	return func(handler Handler) Handler {
+		mw := append(b.middleware, m...)
+		return handler.Transform(mw...)
+	}
 }
 
 // Whether to record request logs
@@ -226,7 +249,7 @@ func (b *Blade) EnableLogRequest() {
 			method := c.request.Method()
 
 			var b []byte
-			if method != "GET" && method != "OPTIONS" && method != "HEAD" {
+			if method == http.MethodPost || method == http.MethodPut && method == http.MethodPatch {
 				b, _ = c.request.RawDataSetBody()
 				c.SetKey(BodyBytesKey, b)
 			}

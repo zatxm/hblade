@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/zatxm/hblade/v2/tools"
+	"github.com/zatxm/hblade/v3/tools"
 )
 
 var (

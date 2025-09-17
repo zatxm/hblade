@@ -23,7 +23,6 @@ type treeNode[T any] struct {
 	startIndex uint8
 	endIndex   uint8
 	kind       byte
-	checked    bool
 }
 
 // split splits the node at the given index and inserts
@@ -268,11 +267,6 @@ func (node *treeNode[T]) end(path string, data T, i int, offset int) (*treeNode[
 func (node *treeNode[T]) each(callback func(*treeNode[T])) {
 	if node.isNil() {
 		return
-	}
-
-	if !node.checked {
-		node.checked = true
-		callback(node)
 	}
 
 	for i := range node.children {

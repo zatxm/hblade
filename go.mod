@@ -1,6 +1,6 @@
-module github.com/zatxm/hblade/v2
+module github.com/zatxm/hblade/v3
 
-go 1.24.3
+go 1.25.0
 
 require (
 	github.com/go-playground/validator/v10 v10.27.0
@@ -11,7 +11,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/ugorji/go/codec v1.3.0
 	go.uber.org/zap v1.27.0
-	google.golang.org/protobuf v1.36.7
+	google.golang.org/protobuf v1.36.9
 )
 
 require (
