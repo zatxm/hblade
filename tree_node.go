@@ -1,9 +1,6 @@
 package hblade
 
-import (
-	"reflect"
-	"strings"
-)
+import "strings"
 
 // node types
 const (
@@ -261,51 +258,4 @@ func (node *treeNode[T]) end(path string, data T, i int, offset int) (*treeNode[
 
 	node.append(path[i:], data)
 	return node, offset, flowStop
-}
-
-// each traverses the tree and calls the given function on every node.
-func (node *treeNode[T]) each(callback func(*treeNode[T])) {
-	if node.isNil() {
-		return
-	}
-
-	for i := range node.children {
-		child := node.children[i]
-		if child == nil {
-			continue
-		}
-
-		child.each(callback)
-	}
-
-	if node.parameter != nil {
-		node.parameter.each(callback)
-	}
-
-	if node.wildcard != nil {
-		node.wildcard.each(callback)
-	}
-}
-
-func (n *treeNode[T]) isNil() bool {
-	if n == nil {
-		return true
-	}
-
-	v := reflect.ValueOf(n.data)
-
-	// 检查是否是零值
-	if !v.IsValid() {
-		return true
-	}
-
-	// 检查可能为 nil 的类型
-	switch v.Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Slice,
-		reflect.Chan, reflect.Func, reflect.Interface:
-		return v.IsNil()
-	default:
-		// 对于值类型，检查是否为零值
-		return v.IsZero()
-	}
 }
