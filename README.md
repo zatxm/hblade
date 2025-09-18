@@ -1,11 +1,11 @@
-# hblade框架(刀锋)
+# hblade(刀锋)框架
 
 golang简易web http框架，用于快速构建web及api服务
 
 ## 使用方法
 
-golang 1.25+  
-go get -u github.com/zatxm/hblade/v3
+1. golang版本1.25+
+1. go get -u github.com/zatxm/hblade/v3
 
 ```golang
 package main
@@ -299,7 +299,7 @@ func main() {
         return c.JSONAndStatus(http.StatusOK, map[string]string{"Data": c.Path()})
     })
 
-    // 全局中间件，中间件控制中间件以下代码路由，因此上面路由不受中间控制
+    // 全局中间件，中间件控制中间件以下代码路由，因此上面路由不受中间件控制
     app.Use(m1, m2)
 
     // Get /b，生效中间件为m1、m2
