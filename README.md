@@ -60,3 +60,74 @@ func main() {
 }
 
 ```
+
+## 路由组
+
+```golang
+package main
+
+import (
+    "net/http"
+
+    "github.com/zatxm/hblade/v3"
+)
+
+func main() {
+    app := hblade.New()
+
+    // 路由组v1
+    {
+        v1 := app.Group("/v1")
+        // 路由/v1/login
+        v1.Post("/login", func(c *hblade.Context) error {
+            return c.JSONAndStatus(http.StatusOK, map[string]string{"Code": "Ok", "Data": c.Path()})
+        })
+        // 路由/v1/submit
+        v1.Post("/submit", func(c *hblade.Context) error {
+            return c.JSONAndStatus(http.StatusOK, map[string]string{"Code": "Ok", "Data": c.Path()})
+        })
+        // 路由/v1/read
+        v1.Get("/read", func(c *hblade.Context) error {
+            return c.String("Ok")
+        })
+    }
+
+    // 路由组v2
+    {
+        v2 := app.Group("/v2")
+        // 路由/v2/login
+        v2.Post("/login", func(c *hblade.Context) error {
+            return c.JSONAndStatus(http.StatusOK, map[string]string{"Code": "Ok", "Data": c.Path()})
+        })
+        // 路由/v2/submit
+        v2.Post("/submit", func(c *hblade.Context) error {
+            return c.JSONAndStatus(http.StatusOK, map[string]string{"Code": "Ok", "Data": c.Path()})
+        })
+        // 路由/v2/read
+        v2.Get("/read", func(c *hblade.Context) error {
+            return c.String("Ok")
+        })
+
+        // v2嵌套路由组vc
+        vc := v2.Group("/vc")
+        // 路由/v2/vc/login
+        vc.Post("/login", func(c *hblade.Context) error {
+            return c.JSONAndStatus(http.StatusOK, map[string]string{"Code": "Ok", "Data": c.Path()})
+        })
+        // 路由/v2/vc/submit
+        vc.Post("/submit", func(c *hblade.Context) error {
+            return c.JSONAndStatus(http.StatusOK, map[string]string{"Code": "Ok", "Data": c.Path()})
+        })
+        // 路由/v2/vc/read
+        vc.Get("/read", func(c *hblade.Context) error {
+            return c.String("Ok")
+        })
+    }
+
+    err := app.Run(":8881")
+    if err != nil {
+        panic(err)
+    }
+}
+
+```
