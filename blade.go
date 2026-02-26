@@ -155,8 +155,10 @@ func (b *Blade) Run(addr string) error {
 
 	select {
 	case sig := <-stop:
-		Log.Info("Shutting down signal", zap.String("signal", sig.String()))
-		return b.Shutdown()
+		Log.Info("Shutting down http(s) server...", zap.String("signal", sig.String()))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return b.Shutdown(ctx)
 	case err := <-errCh:
 		return errors.Wrapf(err, "http(s) server error, addr: %v", addr)
 	}
@@ -188,8 +190,10 @@ func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
 
 	select {
 	case sig := <-stop:
-		Log.Info("Shutting down signal", zap.String("signal", sig.String()))
-		return b.Shutdown()
+		Log.Info("Shutting down server...", zap.String("signal", sig.String()))
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return b.Shutdown(ctx)
 	case err := <-errCh:
 		return errors.Wrapf(err, "listen server: %+v/%+v", srv, l)
 	}
@@ -220,10 +224,7 @@ func (b *Blade) Start(addr string) error {
 	}
 }
 
-func (b *Blade) Shutdown() error {
-	Log.Info("Shutting down http(s) server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+func (b *Blade) Shutdown(ctx context.Context) error {
 	if err := b.server.Shutdown(ctx); err != nil {
 		return errors.Wrap(err, "http(s) server forced to shutdown")
 	}
