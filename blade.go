@@ -196,7 +196,7 @@ func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
 }
 
 // Run start your application with http(s),you can control when to stop
-func (b *Blade) Start(addr string, tls ...string) error {
+func (b *Blade) Start(addr string) error {
 	Log.Debug("Listening and serving HTTP(S)", zap.String("address", addr))
 
 	b.server = &http.Server{Addr: addr, Handler: b}
