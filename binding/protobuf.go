@@ -6,7 +6,7 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"github.com/zatxm/hblade/v3/tools"
+	"github.com/zatxm/hblade/v4/tools"
 )
 
 type protobufBinding struct{}

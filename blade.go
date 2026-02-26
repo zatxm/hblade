@@ -16,6 +16,9 @@ import (
 )
 
 type Blade struct {
+	server       *http.Server
+	tlsCertFile  string
+	tlsKeyFile   string
 	router       *Router[Handler]
 	middleware   []Middleware //Global middleware
 	contextPool  sync.Pool
@@ -43,6 +46,14 @@ func New() *Blade {
 
 func (b *Blade) NotFoundFn(f func(*Context)) {
 	b.notFoundFn = f
+}
+
+func (b *Blade) TlsCertFile(f string) {
+	b.tlsCertFile = f
+}
+
+func (b *Blade) TlsKeyFile(f string) {
+	b.tlsKeyFile = f
 }
 
 // Add registers a new handler for the given method and path.
@@ -120,80 +131,56 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	c.Close()
 }
 
-// Run starts your application with http.
+// Run start your application with http(s)
 func (b *Blade) Run(addr string) error {
-	Log.Debug("Listening and serving HTTP", zap.String("address", addr))
+	Log.Debug("Listening and serving HTTP(S)", zap.String("address", addr))
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
-	srv := &http.Server{Addr: addr, Handler: b}
+	b.server = &http.Server{Addr: addr, Handler: b}
 	errCh := make(chan error, 1)
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			Log.Error("http listen error", zap.Error(err))
+		var err error
+		if b.tlsCertFile == "" || b.tlsKeyFile == "" {
+			err = b.server.ListenAndServe()
+		} else {
+			err = b.server.ListenAndServeTLS(b.tlsCertFile, b.tlsKeyFile)
+		}
+		if err != nil && err != http.ErrServerClosed {
+			Log.Error("http(s) listen error", zap.Error(err))
 			errCh <- err
 		}
 	}()
 
 	select {
 	case sig := <-stop:
-		Log.Info("Shutting down http server...", zap.String("signal", sig.String()))
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			return errors.Wrap(err, "http server forced to shutdown")
-		}
-		Log.Info("Http server exited properly")
-		return nil
+		Log.Info("Shutting down signal", zap.String("signal", sig.String()))
+		return b.Shutdown()
 	case err := <-errCh:
-		return errors.Wrapf(err, "http server error, addr: %v", addr)
+		return errors.Wrapf(err, "http(s) server error, addr: %v", addr)
 	}
 }
 
-// Run starts your application with https.
-func (b *Blade) RunTLS(addr, certFile, keyFile string) error {
-	Log.Debug("Listening and serving HTTPS", zap.String("address", addr))
-
-	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
-
-	srv := &http.Server{Addr: addr, Handler: b}
-	errCh := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServeTLS(certFile, keyFile); err != nil && err != http.ErrServerClosed {
-			Log.Error("https listen error", zap.Error(err))
-			errCh <- err
-		}
-	}()
-
-	select {
-	case sig := <-stop:
-		Log.Info("Shutting down https server...", zap.String("signal", sig.String()))
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			return errors.Wrap(err, "https server forced to shutdown")
-		}
-		Log.Info("Https server exited properly")
-		return nil
-	case err := <-errCh:
-		return errors.Wrapf(err, "https server error, tls: %s/%s:%s", addr, certFile, keyFile)
-	}
-}
-
-// Run starts your application by given server and listener.
+// Run start your application by given server and listener
 func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
-	Log.Debug("Listening and serving HTTP on listener what's bind with address@",
+	Log.Debug("Listening and serving HTTP(S) on listener what's bind with address",
 		zap.String("address", l.Addr().String()))
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
+	b.server = srv
 	srv.Handler = b
 	errCh := make(chan error, 1)
 	go func() {
-		if err := srv.Serve(l); err != nil && err != http.ErrServerClosed {
+		var err error
+		if b.tlsCertFile == "" || b.tlsKeyFile == "" {
+			err = srv.Serve(l)
+		} else {
+			err = srv.ServeTLS(l, b.tlsCertFile, b.tlsKeyFile)
+		}
+		if err != nil && err != http.ErrServerClosed {
 			Log.Error("listen server error", zap.Error(err))
 			errCh <- err
 		}
@@ -201,17 +188,47 @@ func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
 
 	select {
 	case sig := <-stop:
-		Log.Info("Shutting down server...", zap.String("signal", sig.String()))
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if err := srv.Shutdown(ctx); err != nil {
-			return errors.Wrap(err, "https server forced to shutdown")
-		}
-		Log.Info("Server exited properly")
-		return nil
+		Log.Info("Shutting down signal", zap.String("signal", sig.String()))
+		return b.Shutdown()
 	case err := <-errCh:
 		return errors.Wrapf(err, "listen server: %+v/%+v", srv, l)
 	}
+}
+
+// Run start your application with http(s),you can control when to stop
+func (b *Blade) Start(addr string, tls ...string) error {
+	Log.Debug("Listening and serving HTTP(S)", zap.String("address", addr))
+
+	b.server = &http.Server{Addr: addr, Handler: b}
+	errCh := make(chan error, 1)
+	go func() {
+		var err error
+		if b.tlsCertFile == "" || b.tlsKeyFile == "" {
+			err = b.server.ListenAndServe()
+		} else {
+			err = b.server.ListenAndServeTLS(b.tlsCertFile, b.tlsKeyFile)
+		}
+		if err != nil && err != http.ErrServerClosed {
+			Log.Error("http(s) listen error", zap.Error(err))
+			errCh <- err
+		}
+	}()
+
+	select {
+	case err := <-errCh:
+		return errors.Wrapf(err, "http server error, addr: %v", addr)
+	}
+}
+
+func (b *Blade) Shutdown() error {
+	Log.Info("Shutting down http(s) server...")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := b.server.Shutdown(ctx); err != nil {
+		return errors.Wrap(err, "http(s) server forced to shutdown")
+	}
+	Log.Info("Http(s) server exited properly")
+	return nil
 }
 
 // Use adds middleware to your middleware chain.

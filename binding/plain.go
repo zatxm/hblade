@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"reflect"
 
-	"github.com/zatxm/hblade/v3/tools"
+	"github.com/zatxm/hblade/v4/tools"
 )
 
 type plainBinding struct{}
