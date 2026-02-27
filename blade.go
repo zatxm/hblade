@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
@@ -32,7 +33,7 @@ func New() *Blade {
 		router:     &Router[Handler]{},
 		notFoundFn: nil,
 		errorHandler: func(c *Context, err error) {
-			Log.Error("Error in handler",
+			Log().Error("Error in handler",
 				zap.Error(err),
 				zap.String("path", c.request.Path()))
 		},
@@ -133,7 +134,7 @@ func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 
 // Run start your application with http(s)
 func (b *Blade) Run(addr string) error {
-	Log.Debug("Listening and serving HTTP(S)", zap.String("address", addr))
+	Log().Debug("Listening and serving HTTP(S)", zap.String("address", addr))
 
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -148,14 +149,14 @@ func (b *Blade) Run(addr string) error {
 			err = b.server.ListenAndServeTLS(b.tlsCertFile, b.tlsKeyFile)
 		}
 		if err != nil && err != http.ErrServerClosed {
-			Log.Error("http(s) listen error", zap.Error(err))
+			Log().Error("http(s) listen error", zap.Error(err))
 			errCh <- err
 		}
 	}()
 
 	select {
 	case sig := <-stop:
-		Log.Info("Shutting down http(s) server...", zap.String("signal", sig.String()))
+		Log().Info("Shutting down http(s) server...", zap.String("signal", sig.String()))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return b.Shutdown(ctx)
@@ -166,7 +167,7 @@ func (b *Blade) Run(addr string) error {
 
 // Run start your application by given server and listener
 func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
-	Log.Debug("Listening and serving HTTP(S) on listener what's bind with address",
+	Log().Debug("Listening and serving HTTP(S) on listener what's bind with address",
 		zap.String("address", l.Addr().String()))
 
 	stop := make(chan os.Signal, 1)
@@ -183,14 +184,14 @@ func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
 			err = srv.ServeTLS(l, b.tlsCertFile, b.tlsKeyFile)
 		}
 		if err != nil && err != http.ErrServerClosed {
-			Log.Error("listen server error", zap.Error(err))
+			Log().Error("listen server error", zap.Error(err))
 			errCh <- err
 		}
 	}()
 
 	select {
 	case sig := <-stop:
-		Log.Info("Shutting down server...", zap.String("signal", sig.String()))
+		Log().Info("Shutting down server...", zap.String("signal", sig.String()))
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return b.Shutdown(ctx)
@@ -201,7 +202,7 @@ func (b *Blade) RunServer(srv *http.Server, l net.Listener) error {
 
 // Run start your application with http(s),you can control when to stop
 func (b *Blade) Start(addr string) error {
-	Log.Debug("Listening and serving HTTP(S)", zap.String("address", addr))
+	Log().Debug("Listening and serving HTTP(S)", zap.String("address", addr))
 
 	b.server = &http.Server{Addr: addr, Handler: b}
 	errCh := make(chan error, 1)
@@ -213,7 +214,7 @@ func (b *Blade) Start(addr string) error {
 			err = b.server.ListenAndServeTLS(b.tlsCertFile, b.tlsKeyFile)
 		}
 		if err != nil && err != http.ErrServerClosed {
-			Log.Error("http(s) listen error", zap.Error(err))
+			Log().Error("http(s) listen error", zap.Error(err))
 			errCh <- err
 		}
 	}()
@@ -228,7 +229,7 @@ func (b *Blade) Shutdown(ctx context.Context) error {
 	if err := b.server.Shutdown(ctx); err != nil {
 		return errors.Wrap(err, "http(s) server forced to shutdown")
 	}
-	Log.Info("Http(s) server exited properly")
+	Log().Info("Http(s) server exited properly")
 	return nil
 }
 
@@ -259,7 +260,6 @@ func (b *Blade) transformMiddleware(m ...Middleware) func(Handler) Handler {
 func (b *Blade) EnableLogRequest() {
 	b.Use(func(next Handler) Handler {
 		return func(c *Context) error {
-			Log = LogWithCtr(c)
 			start := time.Now()
 			st := start.Format("2006-01-02 15:04:05")
 			path := c.request.Path()
@@ -279,7 +279,8 @@ func (b *Blade) EnableLogRequest() {
 			if latency > time.Minute {
 				latency = latency - latency%time.Second
 			}
-			Log.Info("Request record",
+			signId := uuid.New().String()
+			Log().With(zap.String("ReqId", signId)).Info("Request record",
 				zap.String("time", st),
 				zap.Int("status", c.Status()),
 				zap.String("method", method),
@@ -289,8 +290,6 @@ func (b *Blade) EnableLogRequest() {
 				zap.String("ip", c.ClientIP()),
 				zap.String("user-agent", c.request.req.UserAgent()),
 				zap.Duration("latency", latency))
-
-			Log = LogReleaseCtr(c)
 
 			return err
 		}

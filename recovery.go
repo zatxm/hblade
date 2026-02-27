@@ -21,7 +21,7 @@ func Recovery() Middleware {
 					if req != nil {
 						rawReq, _ = httputil.DumpRequest(req, false)
 					}
-					Log.Fatal("http call panic",
+					Log().Fatal("http call panic",
 						zap.ByteString("rawReq", rawReq),
 						zap.Any("error", err),
 						zap.ByteString("buf", buf))
