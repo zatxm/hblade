@@ -267,7 +267,7 @@ func (b *Blade) EnableLogRequest() {
 			method := c.request.Method()
 
 			var b []byte
-			if method == http.MethodPost || method == http.MethodPut && method == http.MethodPatch {
+			if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
 				b, _ = c.request.RawDataSetBody()
 				c.SetKey(BodyBytesKey, b)
 			}
