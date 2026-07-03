@@ -249,6 +249,12 @@ func (c *Context) HTML(html string) error {
 // Close frees up resources and is automatically called
 // in the ServeHTTP part of the web server.
 func (c *Context) Close() {
+	c.request.req = nil
+	c.response.rw = nil
+	c.handler = nil
+	c.paramCount = 0
+	c.sameSite = 0
+	c.keys = nil
 	c.b.contextPool.Put(c)
 }
 

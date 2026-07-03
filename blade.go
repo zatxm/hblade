@@ -244,7 +244,10 @@ func (b *Blade) newContext(req *http.Request, res http.ResponseWriter) *Context 
 	c.status = http.StatusOK
 	c.request.req = req
 	c.response.rw = res
+	c.handler = nil
 	c.paramCount = 0
+	c.sameSite = 0
+	c.keys = nil
 	return c
 }
 
