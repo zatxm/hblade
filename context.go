@@ -422,7 +422,7 @@ func canCompress(contentType string) bool {
 // This will create an in-memory copy and calculate the E-Tag before sending the data.
 // Compression will be applied if necessary.
 func (c *Context) ReadAll(reader io.Reader) error {
-	data, err := tools.ReadAll(reader)
+	data, err := io.ReadAll(reader)
 	if err != nil {
 		return err
 	}

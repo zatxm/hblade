@@ -2,6 +2,7 @@ package binding
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"reflect"
 
@@ -15,7 +16,7 @@ func (plainBinding) Name() string {
 }
 
 func (plainBinding) Bind(req *http.Request, obj any) error {
-	all, err := tools.ReadAll(req.Body)
+	all, err := io.ReadAll(req.Body)
 	if err != nil {
 		return err
 	}

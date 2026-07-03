@@ -2,11 +2,10 @@ package binding
 
 import (
 	"errors"
+	"io"
 	"net/http"
 
 	"google.golang.org/protobuf/proto"
-
-	"github.com/zatxm/hblade/v4/tools"
 )
 
 type protobufBinding struct{}
@@ -16,7 +15,7 @@ func (protobufBinding) Name() string {
 }
 
 func (b protobufBinding) Bind(req *http.Request, obj any) error {
-	buf, err := tools.ReadAll(req.Body)
+	buf, err := io.ReadAll(req.Body)
 	if err != nil {
 		return err
 	}

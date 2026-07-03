@@ -5,8 +5,6 @@ import (
 	stdContext "context"
 	"io"
 	"net/http"
-
-	"github.com/zatxm/hblade/v4/tools"
 )
 
 type Request interface {
@@ -29,11 +27,11 @@ type request struct {
 }
 
 func (r *request) RawData() (b []byte, err error) {
-	return tools.ReadAll(r.req.Body)
+	return io.ReadAll(r.req.Body)
 }
 
 func (r *request) RawDataSetBody() (b []byte, err error) {
-	b, err = tools.ReadAll(r.req.Body)
+	b, err = io.ReadAll(r.req.Body)
 	if err != nil {
 		return
 	}
