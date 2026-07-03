@@ -72,77 +72,77 @@ func (c *Context) GetKey(key string) (value any, exists bool) {
 
 func (c *Context) GetKeyString(key string) (s string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		s = val.(string)
+		s, _ = val.(string)
 	}
 	return
 }
 
 func (c *Context) GetKeyByte(key string) (s []byte) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		s = val.([]byte)
+		s, _ = val.([]byte)
 	}
 	return
 }
 
 func (c *Context) GetKeyBool(key string) (b bool) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		b = val.(bool)
+		b, _ = val.(bool)
 	}
 	return
 }
 
 func (c *Context) GetKeyInt(key string) (i int) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		i = val.(int)
+		i, _ = val.(int)
 	}
 	return
 }
 
 func (c *Context) GetKeyInt64(key string) (i64 int64) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		i64 = val.(int64)
+		i64, _ = val.(int64)
 	}
 	return
 }
 
 func (c *Context) GetKeyFloat64(key string) (f64 float64) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		f64 = val.(float64)
+		f64, _ = val.(float64)
 	}
 	return
 }
 
 func (c *Context) GetKeyTime(key string) (t time.Time) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		t = val.(time.Time)
+		t, _ = val.(time.Time)
 	}
 	return
 }
 
 func (c *Context) GetKeyDuration(key string) (d time.Duration) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		d = val.(time.Duration)
+		d, _ = val.(time.Duration)
 	}
 	return
 }
 
 func (c *Context) GetKeyStringSlice(key string) (ss []string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		ss = val.([]string)
+		ss, _ = val.([]string)
 	}
 	return
 }
 
 func (c *Context) GetKeyStringMap(key string) (sm map[string]any) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		sm = val.(map[string]any)
+		sm, _ = val.(map[string]any)
 	}
 	return
 }
 
 func (c *Context) GetKeyStringMapString(key string) (sms map[string]string) {
 	if val, ok := c.GetKey(key); ok && val != nil {
-		sms = val.(map[string]string)
+		sms, _ = val.(map[string]string)
 	}
 	return
 }
@@ -207,6 +207,9 @@ func (c *Context) Bytes(body []byte) error {
 
 // addParameter adds a new parameter to the context.
 func (c *Context) addParameter(name string, value string) {
+	if c.paramCount >= maxParams {
+		return
+	}
 	c.paramNames[c.paramCount] = name
 	c.paramValues[c.paramCount] = value
 	c.paramCount++
@@ -488,7 +491,7 @@ func (c *Context) ShouldBindJSON(obj any) error {
 func (c *Context) ShouldBindWith(obj any, b binding.Binding) error {
 	method := c.request.Method()
 	isBodyRequest := false
-	if method != "GET" && method != "OPTIONS" && method != "HEAD" {
+	if hasRequestBody(method) {
 		isBodyRequest = true
 		if _, ok := c.GetKey(BodyBytesKey); !ok {
 			body, err := c.request.RawDataSetBody()
@@ -521,7 +524,7 @@ func (c *Context) ShouldBindQuery(obj any) error {
 // It decodes the json payload into the struct specified as a pointer.
 // It writes a 400 error and sets Content-Type header "text/plain" in the response if input is not valid.
 func (c *Context) Bind(obj any) error {
-	b := binding.Default(c.Request().Method(), c.Request().Header(contentTypeHeader))
+	b := binding.Default(c.Request().Method(), c.Request().ContentType())
 	return c.MustBindWith(obj, b)
 }
 

@@ -1,23 +1,39 @@
 package hblade
 
-import "go.uber.org/zap"
+import (
+	"sync"
 
-var log *zap.Logger
+	"go.uber.org/zap"
+)
+
+var (
+	logMu sync.RWMutex
+	log   *zap.Logger
+)
 
 func initLogger() *zap.Logger {
 	logger, _ := zap.NewDevelopment()
-	defer logger.Sync()
 	return logger
 }
 
 func Log() *zap.Logger {
-	if log != nil {
-		return log
+	logMu.RLock()
+	logger := log
+	logMu.RUnlock()
+	if logger != nil {
+		return logger
 	}
-	log = initLogger()
+
+	logMu.Lock()
+	defer logMu.Unlock()
+	if log == nil {
+		log = initLogger()
+	}
 	return log
 }
 
 func Logger(l *zap.Logger) {
+	logMu.Lock()
+	defer logMu.Unlock()
 	log = l
 }

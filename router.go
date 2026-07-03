@@ -27,6 +27,10 @@ func (router *Router[T]) Add(method string, path string, handler T) {
 // LookupNoAlloc finds the handler and parameters for the given route without using any memory allocations.
 func (router *Router[T]) Lookup(method string, path string, addParameter func(string, string)) T {
 	tree := router.selectTree(method)
+	if tree == nil {
+		var empty T
+		return empty
+	}
 	return tree.Lookup(path, addParameter)
 }
 
