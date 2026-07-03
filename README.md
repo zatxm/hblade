@@ -5,7 +5,7 @@ golang简易web http框架，用于快速构建web及api服务
 ## 使用方法
 
 1. golang版本1.26+
-1. go get -u github.com/zatxm/hblade/v4
+1. go get -u github.com/zatxm/hblade/v5
 
 ```golang
 package main
@@ -14,7 +14,7 @@ import (
     "fmt"
     "net/http"
 
-    "github.com/zatxm/hblade/v4"
+    "github.com/zatxm/hblade/v5"
 )
 
 func main() {
@@ -69,7 +69,7 @@ package main
 import (
     "net/http"
 
-    "github.com/zatxm/hblade/v4"
+    "github.com/zatxm/hblade/v5"
 )
 
 func main() {
@@ -143,7 +143,7 @@ import (
     "fmt"
     "net/http"
 
-    "github.com/zatxm/hblade/v4"
+    "github.com/zatxm/hblade/v5"
 )
 
 var (

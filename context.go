@@ -16,8 +16,8 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/zatxm/hblade/v4/binding"
-	"github.com/zatxm/hblade/v4/tools"
+	"github.com/zatxm/hblade/v5/binding"
+	"github.com/zatxm/hblade/v5/tools"
 )
 
 const (
