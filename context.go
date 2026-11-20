@@ -2,7 +2,6 @@ package hblade
 
 import (
 	"bytes"
-	"compress/gzip"
 	"errors"
 	"io"
 	"mime"
@@ -16,18 +15,23 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/zatxm/hblade/v5/binding"
-	"github.com/zatxm/hblade/v5/tools"
+	"github.com/zatxm/hblade/v26/binding"
+	"github.com/zatxm/hblade/v26/tools"
 )
 
 const (
 	// 此值应接近TCP包大小,设置为256将最终数据包的大小减少了约70个字节
-	gzipThreshold = 256
+	compressThreshold = 256
 
 	// 路由最大参数
 	maxParams    = 64
 	BodyBytesKey = "hblade_bodybyteskey"
+
+	// Pooled contexts keep their keys map for reuse unless it grew beyond this.
+	maxReusedKeys = 32
 )
+
+var ErrRequestInterrupted = errors.New("Request interrupted by the client")
 
 // Context represents a request & response context.
 type Context struct {
@@ -42,6 +46,8 @@ type Context struct {
 	sameSite    http.SameSite
 	mu          sync.RWMutex
 	keys        map[string]any
+	query       url.Values
+	rawQuery    string
 }
 
 // 返回blade
@@ -160,49 +166,55 @@ func (c *Context) GetKeyBodyJsonAny(key string) (sm any) {
 func (c *Context) Bytes(body []byte) error {
 	// If the request has been canceled by the client, stop.
 	if c.request.Context().Err() != nil {
-		return errors.New("Request interrupted by the client")
+		return ErrRequestInterrupted
 	}
 
+	rw := c.response.rw
+
 	// Small response
-	if len(body) < gzipThreshold {
-		c.response.rw.WriteHeader(c.status)
-		_, err := c.response.rw.Write(body)
+	if len(body) < compressThreshold {
+		rw.WriteHeader(c.status)
+		_, err := rw.Write(body)
 		return err
 	}
 
 	// Content type
-	header := c.response.rw.Header()
+	header := rw.Header()
 	contentType := header.Get(contentTypeHeader)
-	isMediaType := isMedia(contentType)
 
 	// Cache control header
-	if isMediaType {
-		header.Set(cacheControlHeader, cacheControlMedia)
+	if isMedia(contentType) {
+		header[cacheControlHeader] = cacheControlMediaValue
 	} else {
-		header.Set(cacheControlHeader, cacheControlAlwaysValidate)
+		header[cacheControlHeader] = cacheControlAlwaysValidateValue
 	}
 
-	// No GZip?
-	clientSupportsGZip := strings.Contains(c.request.Header(acceptEncodingHeader), "gzip")
+	comp := &c.b.compression
+	var encoding string
+	if len(comp.encodings) > 0 && canCompress(contentType) {
+		header.Add(varyHeader, acceptEncodingHeader)
+		encoding = comp.negotiate(c.request.Header(acceptEncodingHeader))
+	}
 
-	if !clientSupportsGZip || !canCompress(contentType) {
+	switch encoding {
+	case EncodingZstd:
+		bp := comp.encodeZstd(body)
+		header[contentEncodingHeader] = contentEncodingZstdValue
+		header.Set(contentLengthHeader, strconv.Itoa(len(*bp)))
+		rw.WriteHeader(c.status)
+		_, err := rw.Write(*bp)
+		comp.releaseZstd(bp)
+		return err
+	case EncodingGzip:
+		header[contentEncodingHeader] = contentEncodingGzipValue
+		rw.WriteHeader(c.status)
+		return comp.writeGzip(rw, body)
+	default:
 		header.Set(contentLengthHeader, strconv.Itoa(len(body)))
-		c.response.rw.WriteHeader(c.status)
-		_, err := c.response.rw.Write(body)
+		rw.WriteHeader(c.status)
+		_, err := rw.Write(body)
 		return err
 	}
-
-	// GZip
-	header.Set(contentEncodingHeader, contentEncodingGzip)
-	c.response.rw.WriteHeader(c.status)
-
-	// Write response body
-	writer, _ := gzip.NewWriterLevel(c.response.rw, gzip.BestCompression)
-	_, err := writer.Write(body)
-	writer.Close()
-
-	// Return the error value of the last Write call
-	return err
 }
 
 // addParameter adds a new parameter to the context.
@@ -217,7 +229,7 @@ func (c *Context) addParameter(name string, value string) {
 
 // JSON encodes the object to a JSON string and responds.
 func (c *Context) JSON(value any) error {
-	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
+	c.response.rw.Header()[contentTypeHeader] = contentTypeJSONValue
 	bytes, err := json.Marshal(value)
 
 	if err != nil {
@@ -229,22 +241,16 @@ func (c *Context) JSON(value any) error {
 
 func (c *Context) JSONAndStatus(status int, value any) error {
 	c.status = status
-	c.response.SetHeader(contentTypeHeader, contentTypeJSON)
-	bytes, err := json.Marshal(value)
-	if err != nil {
-		return err
-	}
-
-	return c.Bytes(bytes)
+	return c.JSON(value)
 }
 
 // HTML sends a HTML string.
 func (c *Context) HTML(html string) error {
 	header := c.response.rw.Header()
-	header.Set(contentTypeHeader, contentTypeHTML)
-	header.Set(contentTypeOptionsHeader, contentTypeOptions)
-	header.Set(xssProtectionHeader, xssProtection)
-	header.Set(referrerPolicyHeader, referrerPolicySameOrigin)
+	header[contentTypeHeader] = contentTypeHTMLValue
+	header[contentTypeOptionsHeader] = contentTypeOptionsValue
+	header[canonicalXSSProtectionHeader] = xssProtectionValue
+	header[referrerPolicyHeader] = referrerPolicySameOriginValue
 
 	return c.String(html)
 }
@@ -255,21 +261,29 @@ func (c *Context) Close() {
 	c.request.req = nil
 	c.response.rw = nil
 	c.handler = nil
+	// Drop references so pooled contexts don't pin request memory.
+	clear(c.paramValues[:c.paramCount])
 	c.paramCount = 0
 	c.sameSite = 0
-	c.keys = nil
+	if len(c.keys) > maxReusedKeys {
+		c.keys = nil
+	} else {
+		clear(c.keys)
+	}
+	c.query = nil
+	c.rawQuery = ""
 	c.b.contextPool.Put(c)
 }
 
 // CSS sends a style sheet.
 func (c *Context) CSS(text string) error {
-	c.response.SetHeader(contentTypeHeader, contentTypeCSS)
+	c.response.rw.Header()[contentTypeHeader] = contentTypeCSSValue
 	return c.String(text)
 }
 
 // JavaScript sends a script.
 func (c *Context) JavaScript(code string) error {
-	c.response.SetHeader(contentTypeHeader, contentTypeJavaScript)
+	c.response.rw.Header()[contentTypeHeader] = contentTypeJavaScriptValue
 	return c.String(code)
 }
 
@@ -280,7 +294,7 @@ func (c *Context) File(file string) error {
 
 	// Cache control header
 	if isMedia(contentType) {
-		c.response.SetHeader(cacheControlHeader, cacheControlMedia)
+		c.response.rw.Header()[cacheControlHeader] = cacheControlMediaValue
 	}
 
 	http.ServeFile(c.response.rw, c.request.req, file)
@@ -357,12 +371,15 @@ func (c *Context) IP() string {
 
 // ClientIP tries to determine the real IP address of the client.
 func (c *Context) ClientIP() string {
-	ip := c.request.Header(forwardedForHeader)
-	ip = strings.TrimSpace(strings.Split(ip, ",")[0])
-	if ip == "" {
-		ip = strings.TrimSpace(c.request.Header(realIPHeader))
+	if ip := c.request.Header(forwardedForHeader); ip != "" {
+		if i := strings.IndexByte(ip, ','); i >= 0 {
+			ip = ip[:i]
+		}
+		if ip = strings.TrimSpace(ip); ip != "" {
+			return ip
+		}
 	}
-	if ip != "" {
+	if ip := strings.TrimSpace(c.request.Header(realIPHeader)); ip != "" {
 		return ip
 	}
 
@@ -378,8 +395,17 @@ func (c *Context) ClientIP() string {
 }
 
 // 从URL获取参数值
+// The parsed query is cached per request and re-parsed only if RawQuery changes.
 func (c *Context) Query(param string) string {
-	return c.request.req.URL.Query().Get(param)
+	raw := c.request.req.URL.RawQuery
+	if raw == "" {
+		return ""
+	}
+	if c.query == nil || c.rawQuery != raw {
+		c.query, _ = url.ParseQuery(raw)
+		c.rawQuery = raw
+	}
+	return c.query.Get(param)
 }
 
 // Redirect redirects to the given URL.
@@ -472,7 +498,7 @@ func (c *Context) Response() Response {
 
 // Text sends a plain text string.
 func (c *Context) Text(text string) error {
-	c.response.SetHeader(contentTypeHeader, contentTypePlainText)
+	c.response.rw.Header()[contentTypeHeader] = contentTypePlainTextValue
 	return c.String(text)
 }
 
@@ -489,22 +515,28 @@ func (c *Context) ShouldBindJSON(obj any) error {
 // ShouldBindWith binds the passed struct pointer using the specified binding engine.
 // See the binding package.
 func (c *Context) ShouldBindWith(obj any, b binding.Binding) error {
-	method := c.request.Method()
-	isBodyRequest := false
-	if hasRequestBody(method) {
-		isBodyRequest = true
-		if _, ok := c.GetKey(BodyBytesKey); !ok {
-			body, err := c.request.RawDataSetBody()
-			if err != nil {
-				return err
-			}
-			c.SetKey(BodyBytesKey, body)
+	if !hasRequestBody(c.request.req.Method) {
+		return b.Bind(c.request.req, obj)
+	}
+
+	var body []byte
+	if v, ok := c.GetKey(BodyBytesKey); ok {
+		body, _ = v.([]byte)
+	} else {
+		var err error
+		if body, err = c.request.RawDataSetBody(); err != nil {
+			return err
 		}
+		c.SetKey(BodyBytesKey, body)
 	}
+
+	// Decode straight from the cached bytes; req.Body stays readable.
+	if bb, ok := b.(binding.BindingBody); ok {
+		return bb.BindBody(body, obj)
+	}
+
 	err := b.Bind(c.request.req, obj)
-	if isBodyRequest {
-		c.request.req.Body = io.NopCloser(bytes.NewBuffer(c.GetKeyByte(BodyBytesKey)))
-	}
+	c.request.req.Body = io.NopCloser(bytes.NewReader(body))
 	return err
 }
 

@@ -34,7 +34,14 @@ func (jsonBinding) Bind(req *http.Request, obj any) error {
 }
 
 func (jsonBinding) BindBody(body []byte, obj any) error {
-	return decodeJSON(bytes.NewReader(body), obj)
+	if EnableDecoderUseNumber || EnableDecoderDisallowUnknownFields {
+		return decodeJSON(bytes.NewReader(body), obj)
+	}
+	// Unmarshal is ~2x faster than the streaming decoder for in-memory data.
+	if err := json.Unmarshal(body, obj); err != nil {
+		return err
+	}
+	return validate(obj)
 }
 
 func decodeJSON(r io.Reader, obj any) error {

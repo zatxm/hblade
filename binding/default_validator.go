@@ -63,8 +63,8 @@ func (v *defaultValidator) ValidateStruct(obj any) error {
 		return v.validateStruct(obj)
 	case reflect.Slice, reflect.Array:
 		count := value.Len()
-		validateRet := make(SliceValidationError, 0)
-		for i := 0; i < count; i++ {
+		var validateRet SliceValidationError
+		for i := range count {
 			if err := v.ValidateStruct(value.Index(i).Interface()); err != nil {
 				validateRet = append(validateRet, err)
 			}

@@ -1,12 +1,13 @@
 package binding
 
 import (
-	"bytes"
-	"io"
 	"net/http"
 
 	"github.com/ugorji/go/codec"
 )
+
+// A handle caches type metadata and is safe for concurrent use, so share one.
+var msgpackHandle = new(codec.MsgpackHandle)
 
 type msgpackBinding struct{}
 
@@ -15,16 +16,14 @@ func (msgpackBinding) Name() string {
 }
 
 func (msgpackBinding) Bind(req *http.Request, obj any) error {
-	return decodeMsgPack(req.Body, obj)
+	if err := codec.NewDecoder(req.Body, msgpackHandle).Decode(&obj); err != nil {
+		return err
+	}
+	return validate(obj)
 }
 
 func (msgpackBinding) BindBody(body []byte, obj any) error {
-	return decodeMsgPack(bytes.NewReader(body), obj)
-}
-
-func decodeMsgPack(r io.Reader, obj any) error {
-	cdc := new(codec.MsgpackHandle)
-	if err := codec.NewDecoder(r, cdc).Decode(&obj); err != nil {
+	if err := codec.NewDecoderBytes(body, msgpackHandle).Decode(&obj); err != nil {
 		return err
 	}
 	return validate(obj)

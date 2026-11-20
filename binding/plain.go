@@ -1,12 +1,11 @@
 package binding
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"reflect"
-
-	"github.com/zatxm/hblade/v5/tools"
 )
 
 type plainBinding struct{}
@@ -43,12 +42,12 @@ func decodePlain(data []byte, obj any) error {
 	}
 
 	if v.Kind() == reflect.String {
-		v.SetString(tools.BytesToString(data))
+		v.SetString(string(data))
 		return nil
 	}
 
 	if _, ok := v.Interface().([]byte); ok {
-		v.SetBytes(data)
+		v.SetBytes(bytes.Clone(data))
 		return nil
 	}
 

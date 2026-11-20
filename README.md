@@ -4,8 +4,8 @@ golang简易web http框架，用于快速构建web及api服务
 
 ## 使用方法
 
-1. golang版本1.26+
-1. go get -u github.com/zatxm/hblade/v5
+1. golang版本1.27.4+
+1. go get -u github.com/zatxm/hblade/v26
 
 ```golang
 package main
@@ -14,7 +14,7 @@ import (
     "fmt"
     "net/http"
 
-    "github.com/zatxm/hblade/v5"
+    "github.com/zatxm/hblade/v26"
 )
 
 func main() {
@@ -69,7 +69,7 @@ package main
 import (
     "net/http"
 
-    "github.com/zatxm/hblade/v5"
+    "github.com/zatxm/hblade/v26"
 )
 
 func main() {
@@ -143,7 +143,7 @@ import (
     "fmt"
     "net/http"
 
-    "github.com/zatxm/hblade/v5"
+    "github.com/zatxm/hblade/v26"
 )
 
 var (
@@ -391,4 +391,32 @@ func main() {
     }
 }
 
+```
+
+## 服务配置
+
+```golang
+app := hblade.New()
+
+// 响应压缩(基于klauspost/compress),默认不启用(通常由nginx/CDN压缩)
+// 服务直接对外时可开启:按参数顺序优先,与客户端Accept-Encoding协商,如下为zstd优先、gzip回退
+// 响应<256字节或图片/音视频不压缩
+app.SetCompression(hblade.EncodingZstd, hblade.EncodingGzip)
+// 不传参数则关闭压缩
+app.SetCompression()
+
+// zstd级别(标准1-22),默认最快级别(约zstd 1),压缩率仍优于gzip 6
+app.SetZstdLevel(3)
+// gzip级别,默认gzip.DefaultCompression
+app.SetGzipLevel(gzip.BestSpeed)
+
+// 自定义Run/Start创建的http.Server,在默认值(ReadHeaderTimeout 10s、IdleTimeout 120s)之后应用
+app.ConfigServer(func(srv *http.Server) {
+    srv.ReadHeaderTimeout = 5 * time.Second
+    srv.MaxHeaderBytes = 1 << 20
+})
+
+// Start不监听信号,调用Shutdown后返回nil
+go app.Start(":8881")
+app.Shutdown(context.Background())
 ```

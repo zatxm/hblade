@@ -1,39 +1,25 @@
 package hblade
 
 import (
-	"sync"
+	"sync/atomic"
 
 	"go.uber.org/zap"
 )
 
-var (
-	logMu sync.RWMutex
-	log   *zap.Logger
-)
-
-func initLogger() *zap.Logger {
-	logger, _ := zap.NewDevelopment()
-	return logger
-}
+// Lock-free so that hot paths calling Log() don't contend on a shared mutex.
+var logger atomic.Pointer[zap.Logger]
 
 func Log() *zap.Logger {
-	logMu.RLock()
-	logger := log
-	logMu.RUnlock()
-	if logger != nil {
-		return logger
+	if l := logger.Load(); l != nil {
+		return l
 	}
-
-	logMu.Lock()
-	defer logMu.Unlock()
-	if log == nil {
-		log = initLogger()
+	l, _ := zap.NewDevelopment()
+	if logger.CompareAndSwap(nil, l) {
+		return l
 	}
-	return log
+	return logger.Load()
 }
 
 func Logger(l *zap.Logger) {
-	logMu.Lock()
-	defer logMu.Unlock()
-	log = l
+	logger.Store(l)
 }

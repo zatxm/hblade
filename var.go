@@ -1,5 +1,7 @@
 package hblade
 
+import "net/textproto"
+
 type flow int
 
 const (
@@ -36,4 +38,24 @@ const (
 	forwardedForHeader            = "X-Forwarded-For"
 	realIPHeader                  = "X-Real-Ip"
 	appengineRemoteAddr           = "X-Appengine-Remote-Addr"
+)
+
+const varyHeader = "Vary"
+
+// Pre-built, canonical header values assigned directly to http.Header to avoid
+// the per-call slice allocation of Header.Set. They must never be mutated.
+var (
+	contentTypeHTMLValue            = []string{contentTypeHTML}
+	contentTypeCSSValue             = []string{contentTypeCSS}
+	contentTypeJavaScriptValue      = []string{contentTypeJavaScript}
+	contentTypeJSONValue            = []string{contentTypeJSON}
+	contentTypePlainTextValue       = []string{contentTypePlainText}
+	cacheControlMediaValue          = []string{cacheControlMedia}
+	cacheControlAlwaysValidateValue = []string{cacheControlAlwaysValidate}
+	contentEncodingGzipValue        = []string{contentEncodingGzip}
+	contentTypeOptionsValue         = []string{contentTypeOptions}
+	xssProtectionValue              = []string{xssProtection}
+	referrerPolicySameOriginValue   = []string{referrerPolicySameOrigin}
+
+	canonicalXSSProtectionHeader = textproto.CanonicalMIMEHeaderKey(xssProtectionHeader)
 )

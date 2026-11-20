@@ -26,17 +26,34 @@ type request struct {
 	req *http.Request
 }
 
-func (r *request) RawData() (b []byte, err error) {
-	return io.ReadAll(r.req.Body)
+// Upper bound for trusting Content-Length to pre-size the body buffer.
+const maxPreallocBody = 8 << 20
+
+func readBody(req *http.Request) ([]byte, error) {
+	if req.Body == nil || req.Body == http.NoBody {
+		return nil, nil
+	}
+	if n := req.ContentLength; n > 0 && n <= maxPreallocBody {
+		b := make([]byte, n)
+		m, err := io.ReadFull(req.Body, b)
+		return b[:m], err
+	}
+	return io.ReadAll(req.Body)
 }
 
-func (r *request) RawDataSetBody() (b []byte, err error) {
-	b, err = io.ReadAll(r.req.Body)
+func (r *request) RawData() ([]byte, error) {
+	return readBody(r.req)
+}
+
+func (r *request) RawDataSetBody() ([]byte, error) {
+	b, err := readBody(r.req)
 	if err != nil {
-		return
+		return b, err
 	}
-	r.req.Body = io.NopCloser(bytes.NewBuffer(b))
-	return
+	if r.req.Body != nil && r.req.Body != http.NoBody {
+		r.req.Body = io.NopCloser(bytes.NewReader(b))
+	}
+	return b, nil
 }
 
 func (r *request) Context() stdContext.Context {

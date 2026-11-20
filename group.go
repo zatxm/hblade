@@ -2,6 +2,7 @@ package hblade
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 )
 
@@ -19,8 +20,7 @@ func (g *Group) Clear() {
 // Add registers a new handler for the given method and path.
 func (g *Group) Add(method, path string, handler Handler, m ...Middleware) {
 	path = g.name + "/" + strings.TrimLeft(path, "/")
-	mw := append(g.middleware, m...)
-	g.app.Add(method, path, handler, mw...)
+	g.app.Add(method, path, handler, slices.Concat(g.middleware, m)...)
 }
 
 // Get registers your function to be called when the given GET path has been requested.
@@ -65,7 +65,7 @@ func (g *Group) Use(m ...Middleware) {
 // Children group
 func (g *Group) Group(name string, m ...Middleware) *Group {
 	name = g.name + "/" + strings.Trim(name, "/")
-	mw := append(g.middleware, m...)
-	cg := &Group{app: g.app, name: name, middleware: mw}
+	// slices.Concat copies, so sibling groups never share (and overwrite) a backing array.
+	cg := &Group{app: g.app, name: name, middleware: slices.Concat(g.middleware, m)}
 	return cg
 }
