@@ -190,7 +190,7 @@ func (b *Blade) Group(name string, m ...Middleware) *Group {
 // ServeHTTP responds to the given request.
 func (b *Blade) ServeHTTP(response http.ResponseWriter, request *http.Request) {
 	c := b.newContext(request, response)
-	c.handler = b.router.Lookup(request.Method, request.URL.Path, c.addParameter)
+	c.handler = b.router.Find(request.Method, request.URL.Path, &c.params)
 	if c.handler == nil {
 		if b.notFoundFn != nil {
 			b.notFoundFn(c)

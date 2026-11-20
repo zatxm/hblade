@@ -35,19 +35,17 @@ var ErrRequestInterrupted = errors.New("Request interrupted by the client")
 
 // Context represents a request & response context.
 type Context struct {
-	b           *Blade
-	status      int
-	request     request
-	response    response
-	handler     Handler
-	paramNames  [maxParams]string
-	paramValues [maxParams]string
-	paramCount  int
-	sameSite    http.SameSite
-	mu          sync.RWMutex
-	keys        map[string]any
-	query       url.Values
-	rawQuery    string
+	b        *Blade
+	status   int
+	request  request
+	response response
+	handler  Handler
+	params   Params
+	sameSite http.SameSite
+	mu       sync.RWMutex
+	keys     map[string]any
+	query    url.Values
+	rawQuery string
 }
 
 // 返回blade
@@ -217,16 +215,6 @@ func (c *Context) Bytes(body []byte) error {
 	}
 }
 
-// addParameter adds a new parameter to the context.
-func (c *Context) addParameter(name string, value string) {
-	if c.paramCount >= maxParams {
-		return
-	}
-	c.paramNames[c.paramCount] = name
-	c.paramValues[c.paramCount] = value
-	c.paramCount++
-}
-
 // JSON encodes the object to a JSON string and responds.
 func (c *Context) JSON(value any) error {
 	c.response.rw.Header()[contentTypeHeader] = contentTypeJSONValue
@@ -262,8 +250,7 @@ func (c *Context) Close() {
 	c.response.rw = nil
 	c.handler = nil
 	// Drop references so pooled contexts don't pin request memory.
-	clear(c.paramValues[:c.paramCount])
-	c.paramCount = 0
+	c.params.Reset()
 	c.sameSite = 0
 	if len(c.keys) > maxReusedKeys {
 		c.keys = nil
@@ -347,13 +334,7 @@ func (c *Context) SetPath(path string) {
 
 // Get retrieves an URL parameter.
 func (c *Context) Get(param string) string {
-	for i := range c.paramCount {
-		if c.paramNames[i] == param {
-			return c.paramValues[i]
-		}
-	}
-
-	return ""
+	return c.params.Get(param)
 }
 
 // GetInt retrieves an URL parameter as an integer.

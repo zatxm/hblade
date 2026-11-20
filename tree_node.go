@@ -1,6 +1,9 @@
 package hblade
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // node types
 const (
@@ -10,16 +13,44 @@ const (
 )
 
 // treeNode represents a radix tree node.
+// Fields read on every lookup step come first so they share one cache line.
 type treeNode[T any] struct {
 	prefix     string
-	data       T
-	children   []*treeNode[T]
-	parameter  *treeNode[T]
-	wildcard   *treeNode[T]
-	indices    []uint8
 	startIndex uint8
 	endIndex   uint8
 	kind       byte
+	hasData    bool // a route ends here; lets lookup backtrack past non-route nodes
+	// table[c-startIndex] is the static child starting with byte c. It is derived
+	// from indices/children so lookups need one dependent load less.
+	table     []*treeNode[T]
+	indices   []uint8
+	children  []*treeNode[T]
+	parameter *treeNode[T]
+	wildcard  *treeNode[T]
+	data      T
+}
+
+func (node *treeNode[T]) setData(data T) {
+	node.data = data
+	node.hasData = true
+}
+
+// child returns the static child starting with c, or nil.
+func (node *treeNode[T]) child(c byte) *treeNode[T] {
+	if i := uint(c) - uint(node.startIndex); i < uint(len(node.table)) {
+		return node.table[i]
+	}
+	return nil
+}
+
+func (node *treeNode[T]) rebuildTable() {
+	table := make([]*treeNode[T], len(node.indices))
+	for i, index := range node.indices {
+		if index != 0 {
+			table[i] = node.children[index]
+		}
+	}
+	node.table = table
 }
 
 // split splits the node at the given index and inserts
@@ -36,7 +67,7 @@ func (node *treeNode[T]) split(index int, path string, data T) {
 	// If the path is empty, it means we don't create a 2nd child node.
 	// Just assign the data for the existing node and store a single child node.
 	if path == "" {
-		node.data = data
+		node.setData(data)
 		node.addChild(splitNode)
 		return
 	}
@@ -52,6 +83,8 @@ func (node *treeNode[T]) clone(prefix string) *treeNode[T] {
 	return &treeNode[T]{
 		prefix:     prefix,
 		data:       node.data,
+		hasData:    node.hasData,
+		table:      node.table,
 		indices:    node.indices,
 		startIndex: node.startIndex,
 		endIndex:   node.endIndex,
@@ -67,11 +100,13 @@ func (node *treeNode[T]) reset(prefix string) {
 	var empty T
 	node.prefix = prefix
 	node.data = empty
+	node.hasData = false
 	node.parameter = nil
 	node.wildcard = nil
 	node.kind = 0
 	node.startIndex = 0
 	node.endIndex = 0
+	node.table = nil
 	node.indices = nil
 	node.children = nil
 }
@@ -111,10 +146,10 @@ func (node *treeNode[T]) addChild(child *treeNode[T]) {
 	if index == 0 {
 		node.indices[firstChar-node.startIndex] = uint8(len(node.children))
 		node.children = append(node.children, child)
-		return
+	} else {
+		node.children[index] = child
 	}
-
-	node.children[index] = child
+	node.rebuildTable()
 }
 
 // addTrailingSlash adds a trailing slash with the same data.
@@ -124,8 +159,9 @@ func (node *treeNode[T]) addTrailingSlash(data T) {
 	}
 
 	node.addChild(&treeNode[T]{
-		prefix: "/",
-		data:   data,
+		prefix:  "/",
+		data:    data,
+		hasData: true,
 	})
 }
 
@@ -137,7 +173,7 @@ func (node *treeNode[T]) append(path string, data T) {
 	// path: /user|/:userid
 	for {
 		if path == "" {
-			node.data = data
+			node.setData(data)
 			return
 		}
 
@@ -154,14 +190,15 @@ func (node *treeNode[T]) append(path string, data T) {
 			// don't add a child and use the node itself.
 			if node.prefix == "" {
 				node.prefix = path
-				node.data = data
+				node.setData(data)
 				node.addTrailingSlash(data)
 				return
 			}
 
 			child := &treeNode[T]{
-				prefix: path,
-				data:   data,
+				prefix:  path,
+				data:    data,
+				hasData: true,
 			}
 
 			node.addChild(child)
@@ -192,7 +229,7 @@ func (node *treeNode[T]) append(path string, data T) {
 				continue
 
 			case wildcard:
-				child.data = data
+				child.setData(data)
 				node.wildcard = child
 				return
 			}
@@ -217,6 +254,7 @@ func (node *treeNode[T]) append(path string, data T) {
 		// the same content as their parent node.
 		if child.prefix == "/" {
 			child.data = node.data
+			child.hasData = node.hasData
 		}
 
 		node.addChild(child)
@@ -251,11 +289,29 @@ func (node *treeNode[T]) end(path string, data T, i int, offset int) (*treeNode[
 	// node: /user/|:id
 	// path: /user/|:id/profile
 	if node.parameter != nil && path[i] == parameter {
+		checkNameConflict(path, i, node.parameter.prefix)
 		node = node.parameter
 		offset = i
 		return node, offset, flowBegin
 	}
 
+	// Registering the same wildcard again just replaces its data.
+	if node.wildcard != nil && path[i] == wildcard {
+		checkNameConflict(path, i, node.wildcard.prefix)
+	}
+
 	node.append(path[i:], data)
 	return node, offset, flowStop
+}
+
+// checkNameConflict panics when the parameter or wildcard starting at path[i]
+// is named differently from the existing one at the same position, which would
+// otherwise silently bind the value to the old name.
+func checkNameConflict(path string, i int, existing string) {
+	name := path[i+1:]
+	name = name[:segmentEnd(name)]
+	if name != existing {
+		panic(fmt.Sprintf("hblade: route %q: %c%s conflicts with existing %c%s at the same position",
+			path, path[i], name, path[i], existing))
+	}
 }

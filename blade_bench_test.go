@@ -105,3 +105,33 @@ func BenchmarkLogParallel(b *testing.B) {
 		}
 	})
 }
+
+var benchRoutes = []string{
+	"/", "/login", "/logout", "/health", "/static/*file",
+	"/api/v1/users", "/api/v1/users/:id", "/api/v1/users/:id/posts", "/api/v1/users/:id/posts/:pid",
+	"/api/v1/users/:id/followers", "/api/v1/users/me", "/api/v1/orders", "/api/v1/orders/:oid",
+	"/api/v1/orders/:oid/items/:iid", "/api/v1/products", "/api/v1/products/:sku", "/api/v1/products/search",
+	"/api/v2/repos/:owner/:repo", "/api/v2/repos/:owner/:repo/issues", "/api/v2/repos/:owner/:repo/issues/:num",
+	"/api/v2/repos/:owner/:repo/pulls/:num/files", "/api/v2/search/code", "/api/v2/search/issues",
+}
+
+func benchLookup(b *testing.B, path string) {
+	r := &Router[Handler]{}
+	h := func(*Context) error { return nil }
+	for _, p := range benchRoutes {
+		r.Add(http.MethodGet, p, h)
+	}
+	var ps Params
+	b.ReportAllocs()
+	for b.Loop() {
+		ps.Reset()
+		if r.Find(http.MethodGet, path, &ps) == nil {
+			b.Fatal("not found")
+		}
+	}
+}
+
+func BenchmarkLookupStatic(b *testing.B)   { benchLookup(b, "/api/v2/search/issues") }
+func BenchmarkLookupParam1(b *testing.B)   { benchLookup(b, "/api/v1/users/12345") }
+func BenchmarkLookupParam3(b *testing.B)   { benchLookup(b, "/api/v2/repos/zatxm/hblade/issues/42") }
+func BenchmarkLookupWildcard(b *testing.B) { benchLookup(b, "/static/js/app/main.min.js") }

@@ -24,7 +24,18 @@ func (router *Router[T]) Add(method string, path string, handler T) {
 	tree.Add(path, handler)
 }
 
-// LookupNoAlloc finds the handler and parameters for the given route without using any memory allocations.
+// Find finds the handler for the given route and appends its parameters to ps,
+// without using any memory allocations.
+func (router *Router[T]) Find(method string, path string, ps *Params) T {
+	tree := router.selectTree(method)
+	if tree == nil {
+		var empty T
+		return empty
+	}
+	return tree.Find(path, ps)
+}
+
+// Lookup finds the handler for the given route and reports each parameter via addParameter.
 func (router *Router[T]) Lookup(method string, path string, addParameter func(string, string)) T {
 	tree := router.selectTree(method)
 	if tree == nil {
